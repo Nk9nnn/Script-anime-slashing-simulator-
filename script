@@ -98,3 +98,61 @@ task.spawn(function()
         end
     end
 end)
+
+
+---------------------------------------------------------------------
+-- AUTO REROLL (ทุก 3 วินาที) → เบากว่าของเดิม 3 เท่า
+---------------------------------------------------------------------
+
+task.spawn(function()
+    local types = {"Clans","Races","Breathings","Haki"}
+
+    while task.wait(3) do
+        if Settings.AutoReroll then
+            for _, t in ipairs(types) do
+                pcall(function()
+                    Bridge:FireServer("General", t, "Reroll")
+                end)
+            end
+        end
+    end
+end)
+
+---------------------------------------------------------------------
+-- AUTO EQUIP BEST (ทุก 5 นาที → ไม่หนัก)
+---------------------------------------------------------------------
+
+task.spawn(function()
+    while task.wait(5) do
+        if Settings.AutoEquipBest then
+            pcall(function()
+                Bridge:FireServer("General","Fighters","Unequip_All")
+                task.wait(1)
+                Bridge:FireServer("General","Fighters","Equip_Best")
+            end)
+        end
+        task.wait(295)
+    end
+end)
+
+
+---------------------------------------------------------------------
+--  AUTO BUY 200 TIMES (ทำงานทุก 10 วินาที)
+---------------------------------------------------------------------
+
+task.spawn(function()
+    local slots = {"Slot4"}
+
+    while task.wait(10) do   -- ← ทำงานทุก 10 วินาที
+        if Settings.AutoBuy200 then
+            for i = 1, 200 do
+                for _, s in ipairs(slots) do
+                    pcall(function()
+                        Bridge:FireServer("General","Trial_Merchant","Buy",s)
+                    end)
+                end
+                task.wait(0.03)  -- ประหยัด RAM / ไม่ spam หนัก
+            end
+        end
+    end
+end)
