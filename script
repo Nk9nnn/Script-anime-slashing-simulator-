@@ -1,6 +1,6 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
 
-
+print("เริ่มทำงานสคริปต์")
 task.spawn(function()
 
     -- ศัตรูกับโลกของมัน
