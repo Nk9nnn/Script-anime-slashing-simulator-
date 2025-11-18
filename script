@@ -2,6 +2,20 @@ loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.l
 
 print("เริ่มทำงานสคริปต์")
 task.spawn(function()
+    local Players = game:GetService("Players")
+    local ReplicatedStorage = game:GetService("ReplicatedStorage")
+    local player = Players.LocalPlayer
+
+    -- ตรวจ HRP ให้พร้อม
+    local function getHRP()
+        local char = player.Character or player.CharacterAdded:Wait()
+        return char:WaitForChild("HumanoidRootPart")
+    end
+
+    local HRP = getHRP()
+    player.CharacterAdded:Connect(function()
+        HRP = getHRP()
+    end)
 
     -- ศัตรูกับโลกของมัน
     local EnemyWorld = {
@@ -9,16 +23,14 @@ task.spawn(function()
         Dome = "Slayer Village",
     }
 
-    -- โซนศัตรูในแต่ละโลก
     local EnemyZones = {
-        Magelen = workspace.Server.Enemies["Pirate Island"],
-        Dome = workspace.Server.Enemies["Slayer Village"]
+        Magelen = workspace.Server.Enemies:WaitForChild("Pirate Island"),
+        Dome    = workspace.Server.Enemies:WaitForChild("Slayer Village")
     }
 
-    -- ลำดับความสำคัญ
     local EnemyPriority = {"Magelen", "Dome"}
 
-    -- ฟังก์ชันวาปไปโลก
+    -- ฟังก์ชันวาปโลก
     local function TPWorld(worldName)
         local args = {
             "General",
@@ -26,78 +38,67 @@ task.spawn(function()
             "Teleport",
             worldName
         }
-        game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args))
-        task.wait(2) -- รอโหลด (ขั้นต่ำ)
+        ReplicatedStorage.Remotes.Bridge:FireServer(unpack(args))
+        task.wait(2) -- รอโหลดโลก
     end
 
     local lastPos = nil
 
-    while task.wait(2) do -- ลูปทุก 2 วิ
+    while task.wait(2) do
         if Settings.TPtoMagelen then
-
             local enemy = nil
             local enemyName = nil
 
-            -- หาเป้าหมายตามลำดับความสำคัญ
+            -- หาเป้าหมายตามลำดับ
             for _, name in ipairs(EnemyPriority) do
                 local folder = EnemyZones[name]
-                if folder then
-                    local found = folder:FindFirstChild(name)
-                    if found then
-                        enemy = found
-                        enemyName = name
-                        break
-                    end
+                if folder and folder:FindFirstChild(name) then
+                    enemy = folder[name]
+                    enemyName = name
+                    break
                 end
             end
 
             if enemy then
-
-                ----------------------------------------------------------------------
                 -- (1) เก็บตำแหน่งเดิม
-                ----------------------------------------------------------------------
-                lastPos = HRP.CFrame
+                if HRP then lastPos = HRP.CFrame end
 
-                ----------------------------------------------------------------------
-                -- (2) วาปไปโลกที่ถูกต้องก่อน
-                ----------------------------------------------------------------------
+                -- (2) วาปไปโลกที่ถูกต้อง
                 TPWorld(EnemyWorld[enemyName])
 
-                ----------------------------------------------------------------------
-                -- (3) เดินขวา 3 วินาที (ลื่นไหล)
-                ----------------------------------------------------------------------
+                -- (3) เดินขวา 3 วินาที
                 local walkTime = 3
-                local walkDirection = HRP.CFrame.RightVector
                 local start = tick()
                 while tick() - start < walkTime do
-                    local delta = task.wait()
-                    HRP.CFrame = HRP.CFrame + walkDirection * 5 * delta
+                    local dt = task.wait()
+                    if HRP then HRP.CFrame = HRP.CFrame + (HRP.CFrame.RightVector * 5 * dt) end
                 end
 
-                ----------------------------------------------------------------------
-                -- (4) วาปขึ้นบนหัวศัตรู
-                ----------------------------------------------------------------------
-                HRP.CFrame = enemy:GetPivot() + Vector3.new(0, 5, 0)
+                -- (4) วาปขึ้นหัวศัตรู
+                if HRP and enemy then
+                    HRP.CFrame = enemy:GetPivot() + Vector3.new(0,5,0)
+                end
 
-                ----------------------------------------------------------------------
-                -- (5) รอจนศัตรูหายไปจากโลกตัวมันเอง
-                ----------------------------------------------------------------------
+                -- (5) รอจนศัตรูหาย
                 local folder = EnemyZones[enemyName]
-                repeat
-                    task.wait(0.2)
-                until not folder:FindFirstChild(enemyName)
+                if folder then
+                    repeat task.wait(0.25)
+                    until not folder:FindFirstChild(enemyName)
+                end
 
-                ----------------------------------------------------------------------
-                -- (6) วาปกลับตำแหน่งเดิม
-                ----------------------------------------------------------------------
+                -- (6) วาปไปโลก Pirate Island
+                TPWorld("Pirate Island")
+
+                -- (7) วาปกลับตำแหน่งเดิม
                 task.wait(0.2)
-                if lastPos then
+                if HRP and lastPos then
                     HRP.CFrame = lastPos
                 end
             end
         end
     end
 end)
+
 
 
 ---------------------------------------------------------------------
