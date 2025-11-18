@@ -49,47 +49,52 @@ task.spawn(function()
             local enemy = nil
             local enemyName = nil
 
-            -- หาเป้าหมายตามลำดับ
+            -- (1) หาเป้าหมายตามลำดับ
             for _, name in ipairs(EnemyPriority) do
                 local folder = EnemyZones[name]
-                if folder and folder:FindFirstChild(name) then
-                    enemy = folder[name]
-                    enemyName = name
-                    break
+                if folder then
+                    local part = folder:FindFirstChild(name)  -- เจอ Part
+                    if part then
+                        enemy = part
+                        enemyName = name
+                        break
+                    end
                 end
             end
 
             if enemy then
-                -- (1) เก็บตำแหน่งเดิม
+                -- (2) เก็บตำแหน่งเดิม
                 if HRP then lastPos = HRP.CFrame end
 
-                -- (2) วาปไปโลกที่ถูกต้อง
+                -- (3) วาปไปโลกที่ถูกต้อง
                 TPWorld(EnemyWorld[enemyName])
 
-                -- (3) เดินขวา 3 วินาที
+                -- (4) เดินขวา 3 วินาที
                 local walkTime = 3
                 local start = tick()
                 while tick() - start < walkTime do
                     local dt = task.wait()
-                    if HRP then HRP.CFrame = HRP.CFrame + (HRP.CFrame.RightVector * 5 * dt) end
+                    if HRP then
+                        HRP.CFrame = HRP.CFrame + (HRP.CFrame.RightVector * 5 * dt)
+                    end
                 end
 
-                -- (4) วาปขึ้นหัวศัตรู
+                -- (5) วาปขึ้นหัวบอส (Part)
                 if HRP and enemy then
-                    HRP.CFrame = enemy:GetPivot() + Vector3.new(0,5,0)
+                    HRP.CFrame = enemy.CFrame + Vector3.new(0,5,0)
                 end
 
-                -- (5) รอจนศัตรูหาย
+                -- (6) รอจนบอสหาย
                 local folder = EnemyZones[enemyName]
                 if folder then
                     repeat task.wait(0.25)
                     until not folder:FindFirstChild(enemyName)
                 end
 
-                -- (6) วาปไปโลก Pirate Island
+                -- (7) วาปไปโลก Pirate Island
                 TPWorld("Pirate Island")
 
-                -- (7) วาปกลับตำแหน่งเดิม
+                -- (8) วาปกลับตำแหน่งเดิม
                 task.wait(0.2)
                 if HRP and lastPos then
                     HRP.CFrame = lastPos
