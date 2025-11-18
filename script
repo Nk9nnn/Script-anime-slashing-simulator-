@@ -7,41 +7,43 @@ local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local Workspace = game:GetService("Workspace")
 local Bridge = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Bridge")
 local player = Players.LocalPlayer
-local Character = player.Character or player.CharacterAdded:Wait()
-local HRP = Character:WaitForChild("HumanoidRootPart")
+local HRP = player.Character and player.Character:FindFirstChild("HumanoidRootPart") or player.CharacterAdded:Wait():WaitForChild("HumanoidRootPart")
 
---// Settings (ใช้สำหรับควบคุม Logic ของ Auto)
+--// Settings
 local Settings = {
-    AutoReroll = false,
-    AutoEquipBest = false,
-    TPtoMagelen = false,
-    AutoBuy200 = false
+    AutoReroll = true,
+    AutoEquipBest = true,
+    TPtoMagelen = true,
+    AutoBuy200 = true
 }
 
---// Kavo UI Library
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/xHeptc/Kavo-UI-Library/main/source.lua"))()
+--// Fluent UI
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local SaveManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/SaveManager.lua"))()
+local InterfaceManager = loadstring(game:HttpGet("https://raw.githubusercontent.com/dawid-scripts/Fluent/master/Addons/InterfaceManager.lua"))()
 
--- 1. สร้างหน้าต่างหลัก (CreateLib)
-local Window = Library.CreateLib("Automation Panel", "BloodTheme") 
+local Window = Fluent:CreateWindow({
+    Title = "Automation Panel",
+    SubTitle = "by dawid",
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = true,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
+})
 
--- 2. สร้างแท็บ (NewTab)
-local MainTab = Window:NewTab("Main")
-local SettingsTab = Window:NewTab("Settings")
+local Tabs = {
+    Main = Window:AddTab({Title = "Main", Icon = ""}),
+    Settings = Window:AddTab({Title = "Settings", Icon = "settings"})
+}
 
--- 3. สร้างส่วนต่างๆ ภายในแท็บ (NewSection)
-local AutomationSection = MainTab:NewSection("Automation")
-local RerollSection = MainTab:NewSection("Reroll Settings")
-local MiscSection = MainTab:NewSection("Misc")
+--// Fighter Dropdown
+local fighterMap = {}
+local fighterItems = {}
 
-
---// Helper function สำหรับการอัพเดทค่า
 local function UpdateFighterDropdown()
-    local fighterMap = {}
-    local fighterItems = {}
-    -- ใช้ FindFirstChild เพราะฟังก์ชันนี้ถูกเรียกซ้ำใน Loop 5 วินาทีด้วย
-    local fightersFolder = Workspace.Server.Fighters:FindFirstChild("8164154729") 
-    
-    if not fightersFolder then return fighterItems, fighterMap end
+    local fightersFolder = Workspace.Server.Fighters["8164154729"]
+    fighterItems = {}
+    fighterMap = {}
 
     for id, fighter in pairs(fightersFolder:GetChildren()) do
         local value = fighter:FindFirstChild("Value")
@@ -53,104 +55,81 @@ local function UpdateFighterDropdown()
             fighterMap[display] = id
         end
     end
-    return fighterItems, fighterMap
 end
 
---// Fighter Dropdown Initialization
--- **🌟 ใช้ Placeholder List เพื่อให้ Dropdown ถูกสร้างขึ้นมาก่อน 🌟**
-local initialFighterItems = {"Loading Fighters..."}
-_G.fighterMap = {}
-_G.SelectedFighter = nil 
+UpdateFighterDropdown()
 
-local FighterDropdown = AutomationSection:NewDropdown("FighterDropdown", "Select Fighter", initialFighterItems, function(display)
-    -- ตรวจสอบไม่ให้เลือก Placeholder
-    if display ~= "Loading Fighters..." and _G.fighterMap[display] then
-        _G.SelectedFighter = _G.fighterMap[display]
-    else
-        _G.SelectedFighter = nil
-    end
+local FighterDropdown = Tabs.Main:AddDropdown("FighterDropdown", {
+    Title = "Select Fighter",
+    Values = fighterItems,
+    Multi = false,
+    Default = 1
+})
+
+FighterDropdown:OnChanged(function(display)
+    _G.SelectedFighter = fighterMap[display]
 end)
 
--- **🌟 โค้ดสำหรับโหลด Fighter จริงๆ หลัง UI ถูกสร้างแล้ว (แก้ไขส่วนรอ) 🌟**
-task.spawn(function()
-    local MAX_WAIT_TIME = 30 -- ยืดเวลาการรอเป็น 30 วินาที
-
-    -- 1. รอ "Server" ใน Workspace
-    local Server = Workspace:WaitForChild("Server", MAX_WAIT_TIME)
-    if not Server then warn("Workspace.Server not found! Fighter Dropdown will not load.") return end
-
-    -- 2. รอ "Fighters" ใน Server
-    local Fighters = Server:WaitForChild("Fighters", MAX_WAIT_TIME)
-    if not Fighters then warn("Server.Fighters not found! Fighter Dropdown will not load.") return end
-
-    -- 3. รอโฟลเดอร์ Fighter ของผู้เล่น
-    local FighterFolder = Fighters:WaitForChild("8164154729", MAX_WAIT_TIME)
-    if not FighterFolder then warn("Fighter Folder '8164154729' not found! Fighter Dropdown will not load.") return end
-    
-    task.wait(0.5) -- รออีกนิดเผื่อข้อมูลภายในกำลัง populate
-
-    -- โหลดข้อมูลจริง
-    local newItems, newMap = UpdateFighterDropdown()
-    _G.fighterMap = newMap
-    
-    -- อัพเดต Dropdown ด้วยข้อมูลจริง
-    local finalItems = #newItems > 0 and newItems or {"No Fighters Found"}
-    if FighterDropdown and FighterDropdown.SetNewValue then
-        FighterDropdown:SetNewValue(finalItems)
-        
-        -- ตั้งค่า SelectedFighter เป็นตัวแรกถ้ามี
-        if #newItems > 0 then
-            FighterDropdown:OnChanged(newItems[1])
-        end
-    end
-end)
-
--- Loop อัพเดทรายชื่อทุก 5 วินาที
+-- อัพเดทรายชื่อทุก 5 วินาที
 task.spawn(function()
     while true do
         task.wait(5)
-        local newItems, newMap = UpdateFighterDropdown()
-        _G.fighterMap = newMap
-        local finalItems = #newItems > 0 and newItems or {"No Fighters Found"}
-
-        if FighterDropdown and FighterDropdown.SetNewValue then
-            FighterDropdown:SetNewValue(finalItems)
-        end
+        UpdateFighterDropdown()
+        FighterDropdown:SetValues(fighterItems)
     end
 end)
 
 --// Trait Dropdown
-_G.SelectedTrait = "Swift III" 
-RerollSection:NewDropdown("TraitDropdown", "Select Trait to Stop", {"Swift III","Clover I","Fortune","Monarch","Vigor II","Fortune III","Swift II","Vigor","Swift","Strongest","Vigor III","Scholar","Clover II","Clover III","Fortune II"}, function(trait)
+local TraitDropdown = Tabs.Main:AddDropdown("TraitDropdown", {
+    Title = "Select Trait to Stop",
+    Values = {"Swift III","Clover I","Fortune","Monarch","Vigor II","Fortune III","Swift II","Vigor","Swift","Strongest","Vigor III","Scholar","Clover II","Clover III","Fortune II"},
+    Multi = false,
+    Default = 1
+})
+
+TraitDropdown:OnChanged(function(trait)
     _G.SelectedTrait = trait
 end)
 
---// Toggles (NewToggle)
--- Auto Reroll
-local RerollToggle = AutomationSection:NewToggle("AutoReroll", "Auto Reroll", Settings.AutoReroll, function(state) 
-    Settings.AutoReroll = state 
-end)
+--// Toggles
+local RerollToggle = Tabs.Main:AddToggle("AutoReroll", {Title = "Auto Reroll", Default = true})
+RerollToggle:OnChanged(function(state) Settings.AutoReroll = state end)
 
--- Auto Equip Best
-MiscSection:NewToggle("AutoEquipBest", "Auto Equip Best", Settings.AutoEquipBest, function(state) 
-    Settings.AutoEquipBest = state 
-end)
+local EquipToggle = Tabs.Main:AddToggle("AutoEquipBest", {Title = "Auto Equip Best", Default = true})
+EquipToggle:OnChanged(function(state) Settings.AutoEquipBest = state end)
 
--- Auto TP to Magelen
-MiscSection:NewToggle("AutoTP", "Auto TP to Magelen", Settings.TPtoMagelen, function(state) 
-    Settings.TPtoMagelen = state 
-end)
+local TPToggle = Tabs.Main:AddToggle("AutoTP", {Title = "Auto TP to Magelen", Default = true})
+TPToggle:OnChanged(function(state) Settings.TPtoMagelen = state end)
 
--- Auto Buy 200
-MiscSection:NewToggle("AutoBuy200", "Auto Buy 200", Settings.AutoBuy200, function(state) 
-    Settings.AutoBuy200 = state 
-end)
+local BuyToggle = Tabs.Main:AddToggle("AutoBuy200", {Title = "Auto Buy 200", Default = true})
+BuyToggle:OnChanged(function(state) Settings.AutoBuy200 = state end)
 
---// Auto Reroll + Stop on Trait
+--// Auto Reroll + Stop on Trait + Fuse Hawk Level Min
 task.spawn(function()
     local types = {"Clans","Races","Breathings","Haki"}
     while task.wait(3) do
-        if Settings.AutoReroll and _G.SelectedFighter then
+        if Settings.AutoReroll then
+            -- เลือก Fighter Level ต่ำสุด และ Value = "Hawk"
+            local minLevel = math.huge
+            local targetFighter = nil
+            local fightersFolder = Workspace.Server.Fighters["8164154729"]
+            for id, fighter in pairs(fightersFolder:GetChildren()) do
+                local value = fighter:FindFirstChild("Value")
+                local level = fighter:FindFirstChild("Level")
+                if value and level and value.Value == "Hawk" and level.Value < minLevel then
+                    minLevel = level.Value
+                    targetFighter = id
+                end
+                -- เปลี่ยน Hawk → Garpe ถ้า Level = 50
+                if value and level and value.Value == "Hawk" and level.Value >= 50 then
+                    value.Value = "Garpe"
+                end
+            end
+            if targetFighter then
+                _G.SelectedFighter = targetFighter
+            end
+
+            -- Fire Reroll
             for _, t in ipairs(types) do
                 pcall(function()
                     Bridge:FireServer("General", t, "Reroll", _G.SelectedFighter)
@@ -158,20 +137,9 @@ task.spawn(function()
             end
 
             -- หยุดถ้า Trait ตรง
-            local fighter = Workspace.Server.Fighters["8164154729"][_G.SelectedFighter]
+            local fighter = fightersFolder[_G.SelectedFighter]
             if fighter and fighter:FindFirstChild("Trait") and fighter.Trait.Value == _G.SelectedTrait then
                 Settings.AutoReroll = false
-                local rerollToggleElement = AutomationSection:GetElement("AutoReroll")
-                if rerollToggleElement and rerollToggleElement.SetState then 
-                    rerollToggleElement:SetState(false)
-                end
-            end
-
-            -- เปลี่ยน Value Hawk → Garpe ถ้า Level = 50
-            if fighter and fighter:FindFirstChild("Value") and fighter:FindFirstChild("Level") then
-                if fighter.Value.Value == "Hawk" and fighter.Level.Value >= 50 then
-                    fighter.Value.Value = "Garpe"
-                end
             end
         end
     end
@@ -191,39 +159,19 @@ task.spawn(function()
     end
 end)
 
---// Auto TP to Magelen (พร้อมเพิ่มการเดินขวา 3 วินาทีก่อน TP)
+--// Auto TP to Magelen
 task.spawn(function()
     local EnemyFolder = Workspace.Server.Enemies["Pirate Island"]
     local EnemyName = "Magelen"
-    local walkDuration = 3 -- ระยะเวลาที่ต้องการให้เดิน (3 วินาที)
-    local walkSpeed = 50 -- กำหนดความเร็วในการเดินไปทางขวา
-
+    local lastPos = nil
     while task.wait(1.5) do
         if Settings.TPtoMagelen then
             local enemy = EnemyFolder:FindFirstChild(EnemyName)
             if enemy then
-                local targetCFrame = enemy:GetPivot()
-                if targetCFrame then 
-                    
-                    -- ⭐ ส่วนที่เพิ่ม: เดินไปทางขวา 3 วินาที ⭐
-                    local originalCFrame = HRP.CFrame
-                    local rightVector = originalCFrame.RightVector * walkSpeed
-
-                    local startTime = tick()
-                    while (tick() - startTime) < walkDuration do
-                        HRP.Velocity = rightVector
-                        task.wait() 
-                    end
-                    HRP.Velocity = Vector3.new(0, 0, 0) -- หยุดเดิน
-
-                    -- ⭐ ส่วน TP ไปหา Magelen ⭐
-                    local lastPos = HRP.CFrame 
-                    HRP.CFrame = targetCFrame + Vector3.new(0,5,0)
-                    
-                    repeat task.wait(0.2); enemy = EnemyFolder:FindFirstChild(EnemyName) until not enemy
-                    
-                    if lastPos then HRP.CFrame = lastPos end
-                end
+                lastPos = HRP.CFrame
+                HRP.CFrame = enemy:GetPivot() + Vector3.new(0,5,0)
+                repeat task.wait(0.2); enemy = EnemyFolder:FindFirstChild(EnemyName) until not enemy
+                if lastPos then HRP.CFrame = lastPos end
             end
         end
     end
@@ -245,3 +193,13 @@ task.spawn(function()
         end
     end
 end)
+
+--// Save & Interface Manager
+SaveManager:SetLibrary(Fluent)
+InterfaceManager:SetLibrary(Fluent)
+SaveManager:SetFolder("FluentScriptHub/specific-game")
+InterfaceManager:SetFolder("FluentScriptHub")
+SaveManager:LoadAutoloadConfig()
+
+--// Notify
+Fluent:Notify({Title = "Fluent Automation", Content = "Script Loaded", Duration = 5})
