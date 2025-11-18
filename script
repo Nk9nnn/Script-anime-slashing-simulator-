@@ -1,163 +1,174 @@
 --// ⭐ โค้ดที่ผู้ใช้ต้องการเพิ่มในบรรทัดแรก ⭐
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
 
---// Kavo UI
-local Library = loadstring(game:HttpGet("https://raw.githubusercontent.com/Stefanuk12/Kavo-UI-Library/main/source.lua"))()
-local Window = Library.CreateLib("AnimeFight Automation", "DarkTheme")
+--// Services
+local Players = game:GetService("Players")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local player = Players.LocalPlayer
+local Bridge = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Bridge")
 
 --// Settings
 local Settings = {
     AutoReroll = true,
     AutoEquipBest = true,
     TPtoMagelen = true,
-    AutoBuy200 = true
+    AutoBuy200 = true,
+    AutoTraitStop = false,
+    SelectedTrait = ""
 }
 
---// References
-local Players = game:GetService("Players")
-local player = Players.LocalPlayer
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Bridge = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Bridge")
-
-local function getHRP()
-    local char = player.Character or player.CharacterAdded:Wait()
-    return char:WaitForChild("HumanoidRootPart")
-end
-
-local HRP = getHRP()
-player.CharacterAdded:Connect(function()
-    HRP = getHRP()
-end)
-
---// Main Tab
-local MainTab = Window:NewTab("Main")
-local MainSection = MainTab:NewSection("Automation")
-
---// AutoReroll Toggle
-MainSection:NewToggle("Auto Reroll", "Reroll Traits automatically", function(state)
-    Settings.AutoReroll = state
-end)
-
---// AutoEquip Toggle
-MainSection:NewToggle("Auto Equip Best", "Equip best fighters every 5 minutes", function(state)
-    Settings.AutoEquipBest = state
-end)
-
---// Auto TP Toggle
-MainSection:NewToggle("TP to Magelen", "Automatically teleport to Magelen", function(state)
-    Settings.TPtoMagelen = state
-end)
-
---// AutoBuy Toggle
-MainSection:NewToggle("Auto Buy 200", "Buy 200 times automatically", function(state)
-    Settings.AutoBuy200 = state
-end)
-
---// Fighter Dropdown
+--// Helper functions
 local function getFighters()
     local fighters = {}
-    local playerFighters = workspace.Server.Fighters[tostring(player.UserId)]
-    for id, fighter in pairs(playerFighters:GetChildren()) do
-        if fighter:FindFirstChild("Value") and fighter:FindFirstChild("Level") and fighter:FindFirstChild("Trait") then
-            table.insert(fighters, string.format("%s | Level: %d | Trait: %s | ID: %s", 
-                fighter.Value.Value, fighter.Level.Value, fighter.Trait.Value, id))
+    local folder = workspace.Server:WaitForChild("Fighters")
+    for userId, data in pairs(folder:GetChildren()) do
+        for fighterId, fighter in pairs(data:GetChildren()) do
+            if fighter:FindFirstChild("Value") and fighter:FindFirstChild("Level") and fighter:FindFirstChild("Trait") then
+                table.insert(fighters, {
+                    Id = fighterId,
+                    Value = fighter.Value.Value,
+                    Level = fighter.Level.Value,
+                    Trait = fighter.Trait.Value
+                })
+            end
         end
     end
     return fighters
 end
 
-local SelectedFighterID = nil
-MainSection:NewDropdown("Select Fighter", "Choose fighter to target", getFighters(), function(option)
-    -- แยก ID ออก
-    SelectedFighterID = option:match("ID: (.+)$")
+--// UI
+local ScreenGui = Instance.new("ScreenGui")
+ScreenGui.ResetOnSpawn = false
+ScreenGui.Parent = player:WaitForChild("PlayerGui")
+
+local MainFrame = Instance.new("Frame")
+MainFrame.Size = UDim2.new(0,250,0,350)
+MainFrame.Position = UDim2.new(0,10,0,100)
+MainFrame.BackgroundColor3 = Color3.fromRGB(30,30,30)
+MainFrame.BorderSizePixel = 0
+MainFrame.Parent = ScreenGui
+
+local ToggleButton = Instance.new("TextButton")
+ToggleButton.Size = UDim2.new(0,40,0,40)
+ToggleButton.Position = UDim2.new(0,210,0,0)
+ToggleButton.Text = "▢"
+ToggleButton.BackgroundColor3 = Color3.fromRGB(50,50,50)
+ToggleButton.Parent = MainFrame
+
+ToggleButton.MouseButton1Click:Connect(function()
+    MainFrame.Visible = not MainFrame.Visible
 end)
 
---// Trait Dropdown
-local TraitsList = {"Swift III","Clover I","Fortune","Monarch","Vigor II","Fortune III",
-                    "Swift II","Vigor","Swift","Strongest","Vigor III","Scholar","Clover II","Clover III","Fortune II"}
-local SelectedTrait = nil
-MainSection:NewDropdown("Select Trait to Stop", "Stop automation if this trait is present", TraitsList, function(option)
-    SelectedTrait = option
+-- Dropdown Fighter
+local FighterDropdown = Instance.new("TextButton")
+FighterDropdown.Size = UDim2.new(0,220,0,30)
+FighterDropdown.Position = UDim2.new(0,15,0,10)
+FighterDropdown.Text = "Select Fighter"
+FighterDropdown.BackgroundColor3 = Color3.fromRGB(60,60,60)
+FighterDropdown.Parent = MainFrame
+
+local FighterList = Instance.new("ScrollingFrame")
+FighterList.Size = UDim2.new(0,220,0,150)
+FighterList.Position = UDim2.new(0,15,0,45)
+FighterList.BackgroundColor3 = Color3.fromRGB(50,50,50)
+FighterList.Visible = false
+FighterList.Parent = MainFrame
+FighterList.CanvasSize = UDim2.new(0,0,1,0)
+
+FighterDropdown.MouseButton1Click:Connect(function()
+    FighterList.Visible = not FighterList.Visible
+    FighterList:ClearAllChildren()
+    local fighters = getFighters()
+    for i,f in ipairs(fighters) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1,0,0,25)
+        btn.Position = UDim2.new(0,0,0,(i-1)*25)
+        btn.Text = f.Value.." | Lvl "..f.Level.." | "..f.Trait
+        btn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+        btn.Parent = FighterList
+        btn.MouseButton1Click:Connect(function()
+            FighterDropdown.Text = btn.Text
+            FighterList.Visible = false
+            -- เก็บ FighterId ที่เลือกไว้
+            MainFrame.SelectedFighter = f.Id
+        end)
+    end
+    FighterList.CanvasSize = UDim2.new(0,0,0,#fighters*25)
 end)
 
---// Auto Reroll Loop
+-- Dropdown Trait
+local TraitDropdown = Instance.new("TextButton")
+TraitDropdown.Size = UDim2.new(0,220,0,30)
+TraitDropdown.Position = UDim2.new(0,15,0,200)
+TraitDropdown.Text = "Select Trait"
+TraitDropdown.BackgroundColor3 = Color3.fromRGB(60,60,60)
+TraitDropdown.Parent = MainFrame
+
+local TraitList = Instance.new("ScrollingFrame")
+TraitList.Size = UDim2.new(0,220,0,120)
+TraitList.Position = UDim2.new(0,15,0,235)
+TraitList.BackgroundColor3 = Color3.fromRGB(50,50,50)
+TraitList.Visible = false
+TraitList.Parent = MainFrame
+TraitList.CanvasSize = UDim2.new(0,0,1,0)
+
+local traitNames = {"Swift","Swift II","Swift III","Clover I","Clover II","Clover III","Fortune","Fortune II","Fortune III","Monarch","Vigor","Vigor II","Vigor III","Strongest","Scholar"}
+
+TraitDropdown.MouseButton1Click:Connect(function()
+    TraitList.Visible = not TraitList.Visible
+    TraitList:ClearAllChildren()
+    for i, t in ipairs(traitNames) do
+        local btn = Instance.new("TextButton")
+        btn.Size = UDim2.new(1,0,0,25)
+        btn.Position = UDim2.new(0,0,0,(i-1)*25)
+        btn.Text = t
+        btn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+        btn.Parent = TraitList
+        btn.MouseButton1Click:Connect(function()
+            TraitDropdown.Text = t
+            TraitList.Visible = false
+            Settings.SelectedTrait = t
+            Settings.AutoTraitStop = true
+        end)
+    end
+    TraitList.CanvasSize = UDim2.new(0,0,0,#traitNames*25)
+end)
+
+-- Buttons to toggle scripts
+local function createToggleButton(name, yPos, settingKey)
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0,220,0,30)
+    btn.Position = UDim2.new(0,15,0,yPos)
+    btn.Text = name.." : ON"
+    btn.BackgroundColor3 = Color3.fromRGB(70,70,70)
+    btn.Parent = MainFrame
+
+    btn.MouseButton1Click:Connect(function()
+        Settings[settingKey] = not Settings[settingKey]
+        btn.Text = name.." : "..(Settings[settingKey] and "ON" or "OFF")
+    end)
+end
+
+createToggleButton("Auto Reroll", 370, "AutoReroll")
+createToggleButton("Auto Equip Best", 410, "AutoEquipBest")
+createToggleButton("TP to Magelen", 450, "TPtoMagelen")
+createToggleButton("Auto Buy 200", 490, "AutoBuy200")
+
+-- ตัวอย่าง Auto Reroll ใช้ FighterId + Trait
 task.spawn(function()
-    local types = {"Clans","Races","Breathings","Haki"}
     while task.wait(3) do
-        if Settings.AutoReroll and SelectedFighterID then
-            local fighter = workspace.Server.Fighters[tostring(player.UserId)][SelectedFighterID]
-            if fighter and fighter:FindFirstChild("Trait") and fighter.Trait.Value == SelectedTrait then
-                -- หยุดหาก Trait ตรง
-            else
-                for _, t in ipairs(types) do
-                    pcall(function()
-                        Bridge:FireServer("General", t, "Reroll", SelectedFighterID)
-                    end)
+        if Settings.AutoReroll then
+            local fighterId = MainFrame.SelectedFighter
+            if fighterId then
+                Bridge:FireServer("General", "Settings", "Fuse_Target", fighterId)
+                -- หยุดการทำงานถ้า Trait ตรง
+                if Settings.AutoTraitStop then
+                    local fighterObj = workspace.Server.Fighters["8164154729"]:FindFirstChild(fighterId)
+                    if fighterObj and fighterObj:FindFirstChild("Trait") and fighterObj.Trait.Value == Settings.SelectedTrait then
+                        Settings.AutoReroll = false
+                    end
                 end
             end
         end
     end
 end)
-
---// Auto Equip Best Loop
-task.spawn(function()
-    while task.wait(5) do
-        if Settings.AutoEquipBest then
-            pcall(function()
-                Bridge:FireServer("General","Fighters","Unequip_All")
-                task.wait(1)
-                Bridge:FireServer("General","Fighters","Equip_Best")
-            end)
-        end
-        task.wait(295)
-    end
-end)
-
---// Auto TP Magelen
-task.spawn(function()
-    local EnemyFolder = workspace.Server.Enemies["Pirate Island"]
-    local EnemyName = "Magelen"
-    local lastPos = nil
-
-    while task.wait(1.5) do
-        if Settings.TPtoMagelen then
-            local enemy = EnemyFolder:FindFirstChild(EnemyName)
-            if enemy then
-                lastPos = HRP.CFrame
-                HRP.CFrame = enemy:GetPivot() + Vector3.new(0,5,0)
-                repeat
-                    task.wait(0.2)
-                    enemy = EnemyFolder:FindFirstChild(EnemyName)
-                until not enemy
-                if lastPos then
-                    HRP.CFrame = lastPos
-                end
-            end
-        end
-    end
-end)
-
---// Auto Buy 200 Loop
-task.spawn(function()
-    local slots = {"Slot4","Slot7","Slot3","Slot2","Slot1"}
-    while task.wait(10) do
-        if Settings.AutoBuy200 then
-            for i = 1, 200 do
-                for _, s in ipairs(slots) do
-                    pcall(function()
-                        Bridge:FireServer("General","Trial_Merchant","Buy",s)
-                    end)
-                end
-                task.wait(0.03)
-            end
-        end
-    end
-end)
-
---// Mobile Mini Icon
-Library:MakeNotification({
-    Name = "UI Minimized",
-    Content = "Tap the square icon to open automation UI",
-    Duration = 5,
-    Image = "rbxassetid://6031094678"
-})
