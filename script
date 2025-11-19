@@ -13,6 +13,7 @@ local RS = game:GetService("ReplicatedStorage")
 local Bridge = RS:WaitForChild("Remotes"):WaitForChild("Bridge")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
+local RunService = game:GetService("RunService")
 
 local function getHRP()
     local char = player.Character or player.CharacterAdded:Wait()
@@ -49,7 +50,6 @@ for bossName, worldName in pairs(BossList) do
     if not baseModel then warn("ไม่พบฐานหลักของโลก "..worldName) end
     if not enemyFolder then warn("ไม่พบโฟลเดอร์บอสของโลก "..worldName) end
 
-    -- ตรวจ PrimaryPart
     if baseModel and baseModel:IsA("Model") and not baseModel.PrimaryPart then
         local firstPart = baseModel:FindFirstChildWhichIsA("BasePart")
         if firstPart then
@@ -75,7 +75,9 @@ local function StartHatching()
     task.spawn(function()
         local args = {"General", "Star", "Open"}
         while _G.HatchingLoop do
-            Bridge:FireServer(unpack(args))
+            if not _G.InTrialRoom then
+                Bridge:FireServer(unpack(args))
+            end
             task.wait(Settings.StarDelay)
         end
     end)
@@ -132,10 +134,42 @@ local function GetCurrentWorld()
     return closestWorld
 end
 
+--// ⭐ ข้อ 11: Trial Room Detection + ESP ⭐ //------------------------
+_G.InTrialRoom = false
+local trialESP = Instance.new("Part")
+trialESP.Anchored = true
+trialESP.CanCollide = false
+trialESP.Size = Vector3.new(20, 0.5, 20) -- ขนาดประมาณ 1 ห้องโถงกลาง
+trialESP.Color = Color3.fromRGB(255, 100, 100)
+trialESP.Transparency = 0.5
+trialESP.Parent = workspace
+trialESP.Position = HRP.Position - Vector3.new(0, HRP.Position.Y - 0.25, 0) -- วางใกล้พื้น
+trialESP.Visible = false
+
+RunService.RenderStepped:Connect(function()
+    local trialRoom = workspace:FindFirstChild("Server")
+        and workspace.Server:FindFirstChild("Gamemodes")
+        and workspace.Server.Gamemodes:FindFirstChild("Trial")
+        and workspace.Server.Gamemodes.Trial:FindFirstChild("Room")
+        and workspace.Server.Gamemodes.Trial.Room:FindFirstChild("Teleport")
+
+    if trialRoom then
+        local dist = (HRP.Position - trialRoom.Position).Magnitude
+        if dist < 15 then -- ระยะประมาณห้อง
+            _G.InTrialRoom = true
+            trialESP.Position = Vector3.new(trialRoom.Position.X, trialRoom.Position.Y + 0.25, trialRoom.Position.Z)
+            trialESP.Visible = true
+        else
+            _G.InTrialRoom = false
+            trialESP.Visible = false
+        end
+    end
+end)
+
 --// ⭐ MAIN LOOP ⭐ //------------------------
 task.spawn(function()
     while task.wait(0.5) do
-        if not Settings.AutoBoss then continue end
+        if not Settings.AutoBoss or _G.InTrialRoom then continue end
 
         -- เช็คโลกปัจจุบัน
         local currentWorld = GetCurrentWorld()
@@ -199,7 +233,6 @@ task.spawn(function()
             print("วาปไปข้างหน้าบอส: "..TargetBoss)
         end
 
-
         -- รอจนบอสตาย
         repeat task.wait(0.2)
         until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
@@ -214,28 +247,49 @@ task.spawn(function()
     end
 end)
 
-print("เริ่มทำงานสคริปต์ ReEquip")
+--// ⭐ ReEquip Loop ⭐ //------------------------
+task.spawn(function()
+    while true do
+        if _G.InTrialRoom then
+            task.wait(0.5) -- หยุดชั่วคราว
+            continue
+        end
 
+        -- Unequip all
+        local args1 = {"General", "Fighters", "Unequip_All"}
+        Bridge:FireServer(unpack(args1))
+
+        task.wait(0.5)
+
+        -- Equip Best
+        local args2 = {"General", "Fighters", "Equip_Best"}
+        Bridge:FireServer(unpack(args2))
+
+        task.wait(45)
+    end
+end)
+
+
+local args = {
+    "General",
+    "Trial_Merchant",
+    "Buy",
+    "Slot4"
+}
+
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+local Bridge = Remotes:WaitForChild("Bridge")
+
+-- ลูปทุกๆ 10 วินาที
 while true do
-    -- Unequip all
-    local args1 = {
-        [1] = "General",
-        [2] = "Fighters",
-        [3] = "Unequip_All"
-    }
-    game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args1))
-
-    -- รอ 1 วินาทีกันเกมไม่ล้ม
-    task.wait(0.5)
-
-    -- Equip Best
-    local args2 = {
-        [1] = "General",
-        [2] = "Fighters",
-        [3] = "Equip_Best"
-    }
-    game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args2))
-
-
-    task.wait(45)
+    -- เรียกใช้ FireServer ด้วย arguments
+    Bridge:FireServer(unpack(args))
+    
+    -- รอ 10 วินาทีก่อนทำซ้ำ
+    wait(10)
 end
+
+print("สคริปต์พร้อมทำงาน")
+
+
