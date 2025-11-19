@@ -214,6 +214,7 @@ task.spawn(function()
     end
 end)
 
+print("เริ่มทำงานสคริปต์ ReEquip")
 
 while true do
     -- Unequip all
