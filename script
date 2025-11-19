@@ -1,6 +1,7 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
 
 print("เริ่มทำงานสคริปต์")
+
 --// ⚡ SETTINGS ⚡ //------------------------
 local Settings = {
     AutoBoss = true,
@@ -44,6 +45,9 @@ for bossName, worldName in pairs(BossList) do
         Base = workspace.Server.Stars:FindFirstChild(worldName),       -- Part ฐานหลักของโลก
         EnemyFolder = workspace.Server.Enemies:FindFirstChild(worldName), -- Folder บอส
     }
+    if not BossData[bossName].Base then
+        warn("ไม่พบฐานหลักของโลก "..worldName)
+    end
     table.insert(BossPriority, bossName)
 end
 
@@ -58,14 +62,30 @@ local function StartHatching()
             task.wait(Settings.StarDelay)
         end
     end)
+    print("เริ่มสุ่มไข่")
 end
 
 local function StopHatching()
     _G.HatchingLoop = false
+    print("หยุดสุ่มไข่")
+end
+
+--// ⭐ วาปไปฐานหลัก ⭐ //------------------------
+local function TPToBase(basePart)
+    if basePart and basePart:IsA("BasePart") then
+        local char = player.Character or player.CharacterAdded:Wait()
+        local hrp = char:WaitForChild("HumanoidRootPart")
+        hrp.CFrame = basePart.CFrame + Vector3.new(0,5,0)
+        print("วาปไปฐานหลักของโลก: "..basePart.Name)
+        task.wait(0.2)
+    else
+        warn("ฐานหลักไม่ถูกต้อง / nil")
+    end
 end
 
 --// ⭐ วาปไปโลก ⭐ //------------------------
 local function TPWorld(worldName)
+    print("วาปไปโลก: "..worldName)
     local args = {"General", "Teleport", "Teleport", worldName}
     Bridge:FireServer(unpack(args))
     task.wait(2)
@@ -102,15 +122,16 @@ task.spawn(function()
         local currentWorld = GetCurrentWorld()
 
         if currentWorld then
-            -- ถ้าอยู่ฐานหลัก → วาปไปฐานหลักของโลกนั้น
+            print("ผู้เล่นอยู่โลก: "..currentWorld)
+            -- วาปไปฐานหลัก
             for _, info in pairs(BossData) do
                 if info.World == currentWorld and info.Base then
-                    HRP.CFrame = info.Base.CFrame + Vector3.new(0,5,0)
+                    TPToBase(info.Base)
                     break
                 end
             end
         else
-            -- ถ้าไม่พบฐานหลัก (Lobby) → วาปไปโลกของบอสตัวแรก
+            print("ไม่พบฐานหลัก อยู่ Lobby")
             if FirstBossWorld then
                 TPWorld(FirstBossWorld)
             end
@@ -130,6 +151,7 @@ task.spawn(function()
                     TargetBoss = name
                     BossInfo = info
                     BossPart = part
+                    print("พบบอส: "..TargetBoss.." ในโลก "..BossInfo.World)
                     break
                 end
             end
@@ -143,6 +165,7 @@ task.spawn(function()
         -- (5) ถ้าอยู่คนละโลก → วาปไปโลกนั้น
         currentWorld = GetCurrentWorld()
         if currentWorld ~= BossInfo.World then
+            print("อยู่คนละโลกกับบอส วาปไป "..BossInfo.World)
             TPWorld(BossInfo.World)
             BossPart = BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
             if not BossPart then continue end
@@ -151,17 +174,20 @@ task.spawn(function()
         -- (6) วาปไปหัวบอส
         if BossPart then
             HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0)
+            print("วาปไปหัวบอส: "..TargetBoss)
         end
 
         -- (7) รอจนบอสตาย
         repeat task.wait(0.2)
         until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
+        print("บอสตาย: "..TargetBoss)
 
         -- (8) วาปกลับฐานหลักของโลกนั้น
         if BossInfo.Base and BossInfo.Base:IsA("BasePart") then
-            HRP.CFrame = BossInfo.Base.CFrame + Vector3.new(0,5,0)
+            TPToBase(BossInfo.Base)
         end
 
         -- (9) กลับไปเริ่มสุ่มไข่อัตโนมัติ
+        print("กลับไปเริ่มสุ่มไข่รอบใหม่")
     end
 end)
