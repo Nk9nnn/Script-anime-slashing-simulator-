@@ -149,23 +149,7 @@ spawn(function()
         currentWorld = GetCurrentWorld()
         if currentWorld ~= BossInfo.World then
             TPWorld(BossInfo.World)
-            task.wait(1)
-
-            -- 📌 Anti-Stuck ตรวจซ้ำหลังวาป
-            local recheckWorld = GetCurrentWorld()
-            if recheckWorld ~= BossInfo.World then
-                -- วาปซ้ำอีกครั้ง
-                TPWorld(BossInfo.World)
-                task.wait(1)
-
-                -- เช็คอีกครั้ง ถ้ายังไม่ใช่ → Reset ตัวละครแก้บัค
-                recheckWorld = GetCurrentWorld()
-                if recheckWorld ~= BossInfo.World then
-                    player.Character:BreakJoints() -- Reset
-                    task.wait(3)
-                end
-            end
-
+            task.wait(0.5)
             continue
         end
         end
