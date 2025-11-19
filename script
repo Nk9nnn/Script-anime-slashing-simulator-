@@ -10,7 +10,7 @@ local Settings = {
 
 --// ⚡ SERVICES ⚡ //------------------------
 local RS = game:GetService("ReplicatedStorage")
-local Bridge = RS.Remotes.Bridge
+local Bridge = RS:WaitForChild("Remotes"):WaitForChild("Bridge")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
@@ -24,30 +24,34 @@ player.CharacterAdded:Connect(function(c)
     HRP = c:WaitForChild("HumanoidRootPart")
 end)
 
---// ⚡ LIST บอสที่ผู้ใช้กำหนดเอง ⚡ //------------------------
+--// ⚡ LIST บอส ⚡ //------------------------
 local BossList = {
     ["Magelen"] = "Pirate Island",
-    ["Dome"]    = "Slayer Village",
+    ["Dome"] = "Slayer Village",
     ["BlackFrieza"] = "Dragon Town",
 }
 
 --// ⚡ DATA PROCESSING ⚡ //------------------------
 local BossData = {}
 local BossPriority = {}
-local FirstBossWorld = nil -- เก็บโลกของบอสตัวแรก
+local FirstBossWorld = nil
 
 for bossName, worldName in pairs(BossList) do
     if not FirstBossWorld then
         FirstBossWorld = worldName
     end
+
+    local base = workspace:WaitForChild("Server"):WaitForChild("Stars"):FindFirstChild(worldName)
+    local enemyFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies"):FindFirstChild(worldName)
+
+    if not base then warn("ไม่พบฐานหลักของโลก "..worldName) end
+    if not enemyFolder then warn("ไม่พบโฟลเดอร์บอสของโลก "..worldName) end
+
     BossData[bossName] = {
         World = worldName,
-        Base = workspace.Server.Stars:FindFirstChild(worldName),       -- Part ฐานหลักของโลก
-        EnemyFolder = workspace.Server.Enemies:FindFirstChild(worldName), -- Folder บอส
+        Base = base,
+        EnemyFolder = enemyFolder,
     }
-    if not BossData[bossName].Base then
-        warn("ไม่พบฐานหลักของโลก "..worldName)
-    end
     table.insert(BossPriority, bossName)
 end
 
@@ -73,11 +77,9 @@ end
 --// ⭐ วาปไปฐานหลัก ⭐ //------------------------
 local function TPToBase(basePart)
     if basePart and basePart:IsA("BasePart") then
-        local char = player.Character or player.CharacterAdded:Wait()
-        local hrp = char:WaitForChild("HumanoidRootPart")
-        hrp.CFrame = basePart.CFrame + Vector3.new(0,5,0)
+        HRP.CFrame = basePart.CFrame + Vector3.new(0,5,0)
         print("วาปไปฐานหลักของโลก: "..basePart.Name)
-        task.wait(0.2)
+        task.wait(0.5)
     else
         warn("ฐานหลักไม่ถูกต้อง / nil")
     end
@@ -89,8 +91,6 @@ local function TPWorld(worldName)
     local args = {"General", "Teleport", "Teleport", worldName}
     Bridge:FireServer(unpack(args))
     task.wait(2)
-    local char = player.Character or player.CharacterAdded:Wait()
-    HRP = char:WaitForChild("HumanoidRootPart")
 end
 
 --// ⭐ เช็คโลกปัจจุบันจากฐานใกล้ที่สุด ⭐ //------------------------
@@ -118,7 +118,7 @@ task.spawn(function()
     while task.wait(0.5) do
         if not Settings.AutoBoss then continue end
 
-        -- (1) เช็คโลกปัจจุบัน
+        -- เช็คโลกปัจจุบัน
         local currentWorld = GetCurrentWorld()
 
         if currentWorld then
@@ -137,12 +137,12 @@ task.spawn(function()
             end
         end
 
-        -- (2) เริ่มสุ่มไข่ต่อเนื่อง
+        -- เริ่มสุ่มไข่
         StartHatching()
 
         local TargetBoss, BossInfo, BossPart = nil, nil, nil
 
-        -- (3) ตรวจหาบอสเป็น Part
+        -- ตรวจหาบอสเป็น Part
         for _, name in ipairs(BossPriority) do
             local info = BossData[name]
             if info and info.EnemyFolder then
@@ -159,10 +159,10 @@ task.spawn(function()
 
         if not TargetBoss then continue end
 
-        -- (4) หยุดสุ่มไข่
+        -- หยุดสุ่มไข่
         StopHatching()
 
-        -- (5) ถ้าอยู่คนละโลก → วาปไปโลกนั้น
+        -- ถ้าอยู่คนละโลก → วาปไปโลกนั้น
         currentWorld = GetCurrentWorld()
         if currentWorld ~= BossInfo.World then
             print("อยู่คนละโลกกับบอส วาปไป "..BossInfo.World)
@@ -171,23 +171,22 @@ task.spawn(function()
             if not BossPart then continue end
         end
 
-        -- (6) วาปไปหัวบอส
+        -- วาปไปหัวบอส
         if BossPart then
             HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0)
             print("วาปไปหัวบอส: "..TargetBoss)
         end
 
-        -- (7) รอจนบอสตาย
+        -- รอจนบอสตาย
         repeat task.wait(0.2)
         until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
         print("บอสตาย: "..TargetBoss)
 
-        -- (8) วาปกลับฐานหลักของโลกนั้น
+        -- วาปกลับฐานหลัก
         if BossInfo.Base and BossInfo.Base:IsA("BasePart") then
             TPToBase(BossInfo.Base)
         end
 
-        -- (9) กลับไปเริ่มสุ่มไข่อัตโนมัติ
         print("กลับไปเริ่มสุ่มไข่รอบใหม่")
     end
 end)
