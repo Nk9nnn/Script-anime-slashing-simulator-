@@ -211,3 +211,28 @@ task.spawn(function()
         print("กลับไปเริ่มสุ่มไข่รอบใหม่")
     end
 end)
+
+
+while true do
+    -- Unequip all
+    local args1 = {
+        [1] = "General",
+        [2] = "Fighters",
+        [3] = "Unequip_All"
+    }
+    game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args1))
+
+    -- รอ 1 วินาทีกันเกมไม่ล้ม
+    task.wait(1)
+
+    -- Equip Best
+    local args2 = {
+        [1] = "General",
+        [2] = "Fighters",
+        [3] = "Equip_Best"
+    }
+    game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args2))
+
+
+    task.wait(30)
+end
