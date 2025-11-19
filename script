@@ -150,8 +150,8 @@ spawn(function()
         if currentWorld ~= BossInfo.World then
             TPWorld(BossInfo.World)
             task.wait(0.5)
-            BossPart = BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
-            if not BossPart then continue end
+            continue
+        end
         end
 
         if BossPart then
