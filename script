@@ -49,9 +49,6 @@ for bossName, worldName in pairs(BossList) do
         local firstPart = baseModel:FindFirstChildWhichIsA("BasePart")
         if firstPart then
             baseModel.PrimaryPart = firstPart
-            print("ตั้ง PrimaryPart ให้ฐานหลัก "..worldName.." เป็น "..firstPart.Name)
-        else
-            warn("ฐานหลัก "..worldName.." ไม่มี Part เลย")
         end
     end
 
@@ -70,34 +67,27 @@ local function StartHatching()
             task.wait(Settings.StarDelay)
         end
     end)
-    print("เริ่มสุ่มไข่")
 end
 
 local function StopHatching()
     _G.HatchingLoop = false
-    print("หยุดสุ่มไข่")
 end
 
 --// ⭐ ฟังก์ชันวาปไปฐานหลัก
 local function TPToBase(baseModel)
-    if baseModel and baseModel:IsA("Model") and baseModel.PrimaryPart then
+    if baseModel and baseModel.PrimaryPart then
         HRP.CFrame = baseModel.PrimaryPart.CFrame + Vector3.new(0,5,0)
-        print("วาปไปฐานหลักของโลก: "..baseModel.Name)
         task.wait(0.5)
-    else
-        warn("ฐานหลักไม่ถูกต้อง / nil หรือไม่มี PrimaryPart")
     end
 end
 
 --// ⭐ วาปไปโลก
 local function TPWorld(worldName)
-    print("วาปไปโลก: "..worldName)
-    local args = {"General", "Teleport", "Teleport", worldName}
-    Bridge:FireServer(unpack(args))
+    Bridge:FireServer("General","Teleport","Teleport",worldName)
     task.wait(2)
 end
 
---// ⭐ เช็คโลกปัจจุบันจากฐานใกล้ที่สุด
+--// ⭐ เช็คโลกปัจจุบัน
 local function GetCurrentWorld()
     local closestWorld = nil
     local closestDist = math.huge
@@ -105,19 +95,13 @@ local function GetCurrentWorld()
 
     for _, data in pairs(BossData) do
         local base = data.Base
-        if base and base:IsA("Model") and base.PrimaryPart then
+        if base and base.PrimaryPart then
             local dist = (myPos - base.PrimaryPart.Position).Magnitude
             if dist < closestDist then
                 closestDist = dist
                 closestWorld = data.World
             end
         end
-    end
-
-    if closestWorld then
-        print("ตรวจจับโลกปัจจุบันได้: "..closestWorld.." (ระยะ "..math.floor(closestDist)..")")
-    else
-        print("ไม่พบฐานหลักใดๆ")
     end
 
     return closestWorld
@@ -128,92 +112,90 @@ task.spawn(function()
     while task.wait(0.5) do
         if not Settings.AutoBoss then continue end
 
+        -- 4. เช็คโลก → ถ้า Lobby ให้ไปโลกแรกในลิตส์
         local currentWorld = GetCurrentWorld()
+        if not currentWorld then
+            TPWorld(FirstBossWorld)
+            TPToBase(BossData[BossPriority[1]].Base)
+            continue
+        end
 
-        if currentWorld then
-            print("ผู้เล่นอยู่โลก: "..currentWorld)
-            for _, info in pairs(BossData) do
-                if info.World == currentWorld and info.Base then
-                    TPToBase(info.Base)
-                    break
-                end
-            end
-        else
-            print("ไม่พบฐานหลัก อยู่ Lobby")
-            if FirstBossWorld then
-                TPWorld(FirstBossWorld)
-                local base = BossData[BossPriority[1]].Base
-                TPToBase(base)
+        -- 5. วาปไปฐานของโลกนั้น
+        for _, info in pairs(BossData) do
+            if info.World == currentWorld then
+                TPToBase(info.Base)
+                break
             end
         end
 
+        -- 6. เริ่มสุ่มไข่
         StartHatching()
 
+        -- 7. เช็คบอส
         local TargetBoss, BossInfo, BossPart = nil, nil, nil
 
         for _, name in ipairs(BossPriority) do
             local info = BossData[name]
-            if info and info.EnemyFolder then
-                local part = info.EnemyFolder:FindFirstChild(name)
-                if part and part:IsA("BasePart") then
-                    TargetBoss = name
-                    BossInfo = info
-                    BossPart = part
-                    print("พบบอส: "..TargetBoss.." ในโลก "..BossInfo.World)
-                    break
-                end
+            local part = info.EnemyFolder:FindFirstChild(name)
+            if part and part:IsA("BasePart") then
+                TargetBoss = name
+                BossInfo = info
+                BossPart = part
+                break
             end
         end
 
-        if not TargetBoss then continue end
+        -- ถ้าไม่พบบอส → กลับโลกแรก
+        if not TargetBoss then
+            StopHatching()
+            TPWorld(FirstBossWorld)
+            TPToBase(BossData[BossPriority[1]].Base)
+            continue
+        end
 
+        -- เจอบอส → หยุดสุ่มไข่ และรอ 1.5 วิ
         StopHatching()
+        task.wait(1.5)
 
+        -- 8. วาปไปโลกของบอส
         currentWorld = GetCurrentWorld()
         if currentWorld ~= BossInfo.World then
-            print("อยู่คนละโลกกับบอส วาปไป "..BossInfo.World)
             TPWorld(BossInfo.World)
+            task.wait(0.5)
             BossPart = BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
             if not BossPart then continue end
         end
 
+        -- 9. วาปขึ้นหัวบอส + ข้างหน้า
         if BossPart then
-            local frontOffset = BossPart.CFrame.LookVector * 5
-            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + frontOffset
-            print("วาปไปข้างหน้าบอส: "..TargetBoss)
+            local front = BossPart.CFrame.LookVector * 5
+            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + front
         end
 
+        -- 10. รอจนบอสตาย
         repeat task.wait(0.2)
         until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
-        print("บอสตาย: "..TargetBoss)
 
-        if BossInfo.Base then
-            TPToBase(BossInfo.Base)
-        end
-
-        print("กลับไปเริ่มสุ่มไข่รอบใหม่")
+        -- 11. วาปกลับโลกแรกในลิตส์
+        TPWorld(FirstBossWorld)
+        TPToBase(BossData[BossPriority[1]].Base)
     end
 end)
 
 --// ⭐ ReEquip LOOP
 task.spawn(function()
     while true do
-        local args1 = {"General","Fighters","Unequip_All"}
-        Bridge:FireServer(unpack(args1))
+        Bridge:FireServer("General","Fighters","Unequip_All")
         task.wait(0.5)
-
-        local args2 = {"General","Fighters","Equip_Best"}
-        Bridge:FireServer(unpack(args2))
-
+        Bridge:FireServer("General","Fighters","Equip_Best")
         task.wait(45)
     end
 end)
 
 --// ⭐ Auto Buy Trial Merchant
 task.spawn(function()
-    local args = {"General","Trial_Merchant","Buy","Slot4"}
     while true do
-        Bridge:FireServer(unpack(args))
+        Bridge:FireServer("General","Trial_Merchant","Buy","Slot4")
         task.wait(2)
     end
 end)
@@ -223,11 +205,10 @@ task.spawn(function()
     local types = {"Clans","Races","Breathings","Haki"}
     while true do
         for _, t in ipairs(types) do
-            local args = {"General", t, "Reroll"}
-            Bridge:FireServer(unpack(args))
+            Bridge:FireServer("General", t, "Reroll")
         end
         task.wait(2)
     end
 end)
 
-print("สคริปต์ทั้งหมดเริ่มทำงานเรียบร้อย ✅")
+print("สคริปต์ทำงานสมบูรณ์ตามลำดับใหม่แล้ว ✔️")
