@@ -1,110 +1,171 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
 
 print("เริ่มทำงานสคริปต์")
-task.spawn(function()
-    local Players = game:GetService("Players")
-    local ReplicatedStorage = game:GetService("ReplicatedStorage")
-    local player = Players.LocalPlayer
+--// ⚡ SETTINGS ⚡ //------------------------
+local Settings = {
+    AutoBoss = true,
+    StarDelay = 0.1,
+}
 
-    -- ตรวจ HRP ให้พร้อม
-    local function getHRP()
-        local char = player.Character or player.CharacterAdded:Wait()
-        return char:WaitForChild("HumanoidRootPart")
+--// ⚡ SERVICES ⚡ //------------------------
+local RS = game:GetService("ReplicatedStorage")
+local Bridge = RS.Remotes.Bridge
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+local function getHRP()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart")
+end
+local HRP = getHRP()
+
+player.CharacterAdded:Connect(function(c)
+    HRP = c:WaitForChild("HumanoidRootPart")
+end)
+
+--// ⚡ LIST บอสที่ผู้ใช้กำหนดเอง ⚡ //------------------------
+local BossList = {
+    ["Magelen"] = "Pirate Island",
+    ["Dome"]    = "Slayer Village",
+    ["BlackFrieza"] = "Dragon Town",
+}
+
+--// ⚡ DATA PROCESSING ⚡ //------------------------
+local BossData = {}
+local BossPriority = {}
+local FirstBossWorld = nil -- เก็บโลกของบอสตัวแรก
+
+for bossName, worldName in pairs(BossList) do
+    if not FirstBossWorld then
+        FirstBossWorld = worldName
     end
+    BossData[bossName] = {
+        World = worldName,
+        Base = workspace.Server.Stars:FindFirstChild(worldName), -- Part ฐานโลก
+        EnemyFolder = workspace.Server.Enemies:FindFirstChild(worldName), -- Folder บอส
+    }
+    table.insert(BossPriority, bossName)
+end
 
-    local HRP = getHRP()
-    player.CharacterAdded:Connect(function()
-        HRP = getHRP()
+--// ⭐ ฟังก์ชันสุ่มไข่ ⭐ //------------------------
+local function StartHatching()
+    if _G.HatchingLoop then return end
+
+    _G.HatchingLoop = true
+    task.spawn(function()
+        local args = {"General", "Star", "Open"}
+        while _G.HatchingLoop do
+            Bridge:FireServer(unpack(args))
+            task.wait(Settings.StarDelay)
+        end
     end)
+end
 
-    -- ศัตรูกับโลกของมัน
-    local EnemyWorld = {
-        Magelen = "Pirate Island",
-        Dome = "Slayer Village",
-    }
+local function StopHatching()
+    _G.HatchingLoop = false
+end
 
-    local EnemyZones = {
-        Magelen = workspace.Server.Enemies:WaitForChild("Pirate Island"),
-        Dome    = workspace.Server.Enemies:WaitForChild("Slayer Village")
-    }
+--// ⭐ วาปไปโลก ⭐ //------------------------
+local function TPWorld(worldName)
+    local args = {"General", "Teleport", "Teleport", worldName}
+    Bridge:FireServer(unpack(args))
+    task.wait(2)
+    local char = player.Character or player.CharacterAdded:Wait()
+    HRP = char:WaitForChild("HumanoidRootPart")
+end
 
-    local EnemyPriority = {"Magelen", "Dome"}
+--// ⭐ เช็คโลกปัจจุบันจากฐานใกล้ที่สุด ⭐ //------------------------
+local function GetCurrentWorld()
+    local closestWorld = nil
+    local closestDist = math.huge
+    local myPos = HRP.Position
 
-    -- ฟังก์ชันวาปโลก
-    local function TPWorld(worldName)
-        local args = {
-            "General",
-            "Teleport",
-            "Teleport",
-            worldName
-        }
-        ReplicatedStorage.Remotes.Bridge:FireServer(unpack(args))
-        task.wait(2) -- รอโหลดโลก
-    end
-
-    local lastPos = nil
-
-    while task.wait(2) do
-        if Settings.TPtoMagelen then
-            local enemy = nil
-            local enemyName = nil
-
-            -- (1) หาเป้าหมายตามลำดับ
-            for _, name in ipairs(EnemyPriority) do
-                local folder = EnemyZones[name]
-                if folder then
-                    local part = folder:FindFirstChild(name)  -- เจอ Part
-                    if part then
-                        enemy = part
-                        enemyName = name
-                        break
-                    end
-                end
-            end
-
-            if enemy then
-                -- (2) เก็บตำแหน่งเดิม
-                if HRP then lastPos = HRP.CFrame end
-
-                -- (3) วาปไปโลกที่ถูกต้อง
-                TPWorld(EnemyWorld[enemyName])
-
-                -- (4) เดินขวา 3 วินาที
-                local walkTime = 3
-                local start = tick()
-                while tick() - start < walkTime do
-                    local dt = task.wait()
-                    if HRP then
-                        HRP.CFrame = HRP.CFrame + (HRP.CFrame.RightVector * 5 * dt)
-                    end
-                end
-
-                -- (5) วาปขึ้นหัวบอส (Part)
-                if HRP and enemy then
-                    HRP.CFrame = enemy.CFrame + Vector3.new(0,5,0)
-                end
-
-                -- (6) รอจนบอสหาย
-                local folder = EnemyZones[enemyName]
-                if folder then
-                    repeat task.wait(0.25)
-                    until not folder:FindFirstChild(enemyName)
-                end
-
-                -- (7) วาปไปโลก Pirate Island
-                TPWorld("Pirate Island")
-
-                -- (8) วาปกลับตำแหน่งเดิม
-                task.wait(0.2)
-                if HRP and lastPos then
-                    HRP.CFrame = lastPos
-                end
+    for bossName, data in pairs(BossData) do
+        local base = data.Base
+        if base and base:IsA("BasePart") then
+            local dist = (myPos - base.Position).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                closestWorld = data.World
             end
         end
     end
+
+    return closestWorld
+end
+
+--// ⭐ MAIN LOOP ⭐ //------------------------
+task.spawn(function()
+    while task.wait(0.5) do
+        if not Settings.AutoBoss then continue end
+
+        -- (1) เช็คโลกปัจจุบัน
+        local currentWorld = GetCurrentWorld()
+
+        if currentWorld then
+            -- ถ้าอยู่ฐานหลัก → วาปไปฐานหลักของโลกนั้น
+            for _, info in pairs(BossData) do
+                if info.World == currentWorld and info.Base then
+                    HRP.CFrame = info.Base.CFrame + Vector3.new(0,5,0)
+                    break
+                end
+            end
+        else
+            -- ถ้าไม่พบฐานหลัก (Lobby) → วาปไปโลกของบอสตัวแรก
+            if FirstBossWorld then
+                TPWorld(FirstBossWorld)
+            end
+        end
+
+        -- (2) เริ่มสุ่มไข่ต่อเนื่อง
+        StartHatching()
+
+        local TargetBoss, BossInfo, BossPart = nil, nil, nil
+
+        -- (3) ตรวจหาบอสเป็น Part
+        for _, name in ipairs(BossPriority) do
+            local info = BossData[name]
+            if info and info.EnemyFolder then
+                local part = info.EnemyFolder:FindFirstChild(name)
+                if part and part:IsA("BasePart") then
+                    TargetBoss = name
+                    BossInfo = info
+                    BossPart = part
+                    break
+                end
+            end
+        end
+
+        if not TargetBoss then continue end
+
+        -- (4) หยุดสุ่มไข่
+        StopHatching()
+
+        -- (5) ถ้าอยู่คนละโลก → วาปไปโลกนั้น
+        currentWorld = GetCurrentWorld()
+        if currentWorld ~= BossInfo.World then
+            TPWorld(BossInfo.World)
+            BossPart = BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
+            if not BossPart then continue end
+        end
+
+        -- (6) วาปไปหัวบอส
+        if BossPart then
+            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0)
+        end
+
+        -- (7) รอจนบอสตาย
+        repeat task.wait(0.2)
+        until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
+
+        -- (8) วาปกลับฐานหลักของโลกนั้น
+        if BossInfo.Base and BossInfo.Base:IsA("BasePart") then
+            HRP.CFrame = BossInfo.Base.CFrame + Vector3.new(0,5,0)
+        end
+
+        -- (9) กลับไปเริ่มสุ่มไข่อัตโนมัติ
+    end
 end)
-
-
 
 ---------------------------------------------------------------------
 -- AUTO REROLL (ทุก 3 วินาที) → เบากว่าของเดิม 3 เท่า
