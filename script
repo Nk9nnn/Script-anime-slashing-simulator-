@@ -1,6 +1,6 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
 loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Just-A-Script-English-Version-66496"))()
-wait(5)
+
 print("เริ่มทำงานสคริปต์")
 
 --// ⚡ SETTINGS ⚡ //------------------------
