@@ -223,7 +223,7 @@ while true do
     game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args1))
 
     -- รอ 1 วินาทีกันเกมไม่ล้ม
-    task.wait(1)
+    task.wait(0.5)
 
     -- Equip Best
     local args2 = {
