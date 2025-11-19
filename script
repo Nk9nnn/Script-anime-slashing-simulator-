@@ -5,7 +5,7 @@ print("เริ่มทำงานสคริปต์")
 --// ⚡ SETTINGS ⚡
 local Settings = {
     AutoBoss = true,
-    StarDelay = 0.1,
+    StarDelay = 0.05,
 }
 
 --// ⚡ SERVICES ⚡
