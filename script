@@ -73,8 +73,15 @@ local function TPWorld(worldName)
     task.wait(2)
 end
 
---// ⭐ เช็คโลกปัจจุบัน
+--// ⭐ เช็คโลกปัจจุบัน (อัปเดตทุก 5 วินาที)
+local lastWorldCheck = 0
+local cachedWorld = nil
 local function GetCurrentWorld()
+    if tick() - lastWorldCheck < 5 and cachedWorld ~= nil then
+        return cachedWorld
+    end
+    lastWorldCheck = tick()
+
     local closestWorld = nil
     local closestDist = math.huge
     local myPos = HRP.Position
@@ -87,6 +94,12 @@ local function GetCurrentWorld()
                 closestDist = dist
                 closestWorld = data.World
             end
+        end
+    end
+
+    cachedWorld = closestWorld
+    return cachedWorld
+end
         end
     end
 
