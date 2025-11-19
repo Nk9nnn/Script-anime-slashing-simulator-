@@ -20,7 +20,6 @@ local function getHRP()
     return char:WaitForChild("HumanoidRootPart")
 end
 local HRP = getHRP()
-
 player.CharacterAdded:Connect(function(c)
     HRP = c:WaitForChild("HumanoidRootPart")
 end)
@@ -37,24 +36,34 @@ local BossData = {}
 local BossPriority = {}
 local FirstBossWorld = nil
 
+local starsFolder = workspace:WaitForChild("Server"):WaitForChild("Stars")
+local enemiesFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies")
+
 for bossName, worldName in pairs(BossList) do
     if not FirstBossWorld then
         FirstBossWorld = worldName
     end
 
-    -- รอให้ Stars และ Enemies โหลด
-    local starsFolder = workspace:WaitForChild("Server"):WaitForChild("Stars")
-    local enemiesFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies")
-
-    local base = starsFolder:WaitForChild(worldName)
+    local baseModel = starsFolder:WaitForChild(worldName)
     local enemyFolder = enemiesFolder:WaitForChild(worldName)
 
-    if not base then warn("ไม่พบฐานหลักของโลก "..worldName) end
+    if not baseModel then warn("ไม่พบฐานหลักของโลก "..worldName) end
     if not enemyFolder then warn("ไม่พบโฟลเดอร์บอสของโลก "..worldName) end
+
+    -- ตรวจ PrimaryPart
+    if baseModel and baseModel:IsA("Model") and not baseModel.PrimaryPart then
+        local firstPart = baseModel:FindFirstChildWhichIsA("BasePart")
+        if firstPart then
+            baseModel.PrimaryPart = firstPart
+            print("ตั้ง PrimaryPart ให้ฐานหลัก "..worldName.." เป็น "..firstPart.Name)
+        else
+            warn("ฐานหลัก "..worldName.." ไม่มี Part เลย")
+        end
+    end
 
     BossData[bossName] = {
         World = worldName,
-        Base = base,
+        Base = baseModel,
         EnemyFolder = enemyFolder,
     }
     table.insert(BossPriority, bossName)
@@ -79,14 +88,14 @@ local function StopHatching()
     print("หยุดสุ่มไข่")
 end
 
---// ⭐ วาปไปฐานหลัก ⭐ //------------------------
-local function TPToBase(basePart)
-    if basePart and basePart:IsA("BasePart") then
-        HRP.CFrame = basePart.CFrame + Vector3.new(0,5,0)
-        print("วาปไปฐานหลักของโลก: "..basePart.Name)
+--// ⭐ วาปไปฐานหลัก (รองรับ Model) ⭐ //------------------------
+local function TPToBase(baseModel)
+    if baseModel and baseModel:IsA("Model") and baseModel.PrimaryPart then
+        HRP.CFrame = baseModel.PrimaryPart.CFrame + Vector3.new(0,5,0)
+        print("วาปไปฐานหลักของโลก: "..baseModel.Name.." (PrimaryPart: "..baseModel.PrimaryPart.Name..")")
         task.wait(0.5)
     else
-        warn("ฐานหลักไม่ถูกต้อง / nil")
+        warn("ฐานหลักไม่ถูกต้อง / nil หรือไม่มี PrimaryPart")
     end
 end
 
@@ -106,8 +115,8 @@ local function GetCurrentWorld()
 
     for _, data in pairs(BossData) do
         local base = data.Base
-        if base and base:IsA("BasePart") then
-            local dist = (myPos - base.Position).Magnitude
+        if base and base:IsA("Model") and base.PrimaryPart then
+            local dist = (myPos - base.PrimaryPart.Position).Magnitude
             if dist < closestDist then
                 closestDist = dist
                 closestWorld = data.World
@@ -196,7 +205,7 @@ task.spawn(function()
         print("บอสตาย: "..TargetBoss)
 
         -- วาปกลับฐานหลัก
-        if BossInfo.Base and BossInfo.Base:IsA("BasePart") then
+        if BossInfo.Base then
             TPToBase(BossInfo.Base)
         end
 
