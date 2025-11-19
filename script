@@ -1,4 +1,5 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
+loadstring(game:HttpGet("https://rawscripts.net/raw/Universal-Script-Just-A-Script-English-Version-66496"))()
 
 print("เริ่มทำงานสคริปต์")
 
@@ -41,8 +42,12 @@ for bossName, worldName in pairs(BossList) do
         FirstBossWorld = worldName
     end
 
-    local base = workspace:WaitForChild("Server"):WaitForChild("Stars"):FindFirstChild(worldName)
-    local enemyFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies"):FindFirstChild(worldName)
+    -- รอให้ Stars และ Enemies โหลด
+    local starsFolder = workspace:WaitForChild("Server"):WaitForChild("Stars")
+    local enemiesFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies")
+
+    local base = starsFolder:WaitForChild(worldName)
+    local enemyFolder = enemiesFolder:WaitForChild(worldName)
 
     if not base then warn("ไม่พบฐานหลักของโลก "..worldName) end
     if not enemyFolder then warn("ไม่พบโฟลเดอร์บอสของโลก "..worldName) end
@@ -110,6 +115,12 @@ local function GetCurrentWorld()
         end
     end
 
+    if closestWorld then
+        print("ตรวจจับโลกปัจจุบันได้: "..closestWorld.." (ระยะ "..math.floor(closestDist)..")")
+    else
+        print("ไม่พบฐานหลักใดๆ")
+    end
+
     return closestWorld
 end
 
@@ -134,6 +145,8 @@ task.spawn(function()
             print("ไม่พบฐานหลัก อยู่ Lobby")
             if FirstBossWorld then
                 TPWorld(FirstBossWorld)
+                local base = BossData[BossPriority[1]].Base
+                TPToBase(base)
             end
         end
 
