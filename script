@@ -202,7 +202,7 @@ end)
 
 --// ⭐ Auto Reroll Types
 task.spawn(function()
-    local types = {"Clans","Races","Breathings","Haki"}
+    local types = {"Clans","Races","Breathings","Haki","Ki","Fruits"}
     while true do
         for _, t in ipairs(types) do
             Bridge:FireServer("General", t, "Reroll")
