@@ -192,11 +192,13 @@ task.spawn(function()
             if not BossPart then continue end
         end
 
-        -- วาปไปหัวบอส
+        -- วาปไปข้างหน้าบอส
         if BossPart then
-            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0)
-            print("วาปไปหัวบอส: "..TargetBoss)
+            local frontOffset = BossPart.CFrame.LookVector * 5  -- 5 studs ข้างหน้า
+            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + frontOffset
+            print("วาปไปข้างหน้าบอส: "..TargetBoss)
         end
+
 
         -- รอจนบอสตาย
         repeat task.wait(0.2)
@@ -234,5 +236,5 @@ while true do
     game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args2))
 
 
-    task.wait(30)
+    task.wait(45)
 end
