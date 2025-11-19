@@ -1,19 +1,20 @@
+--// โหลดสคริปต์หลัก
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
-
 print("เริ่มทำงานสคริปต์")
 
---// ⚡ SETTINGS ⚡ //------------------------
+--// ⚡ SETTINGS ⚡
 local Settings = {
     AutoBoss = true,
     StarDelay = 0.1,
 }
 
---// ⚡ SERVICES ⚡ //------------------------
+--// ⚡ SERVICES ⚡
 local RS = game:GetService("ReplicatedStorage")
 local Bridge = RS:WaitForChild("Remotes"):WaitForChild("Bridge")
 local Players = game:GetService("Players")
 local player = Players.LocalPlayer
 
+--// ฟังก์ชันได้ HumanoidRootPart
 local function getHRP()
     local char = player.Character or player.CharacterAdded:Wait()
     return char:WaitForChild("HumanoidRootPart")
@@ -23,14 +24,14 @@ player.CharacterAdded:Connect(function(c)
     HRP = c:WaitForChild("HumanoidRootPart")
 end)
 
---// ⚡ LIST บอส ⚡ //------------------------
+--// ⚡ LIST บอส
 local BossList = {
     ["Magelen"] = "Pirate Island",
     ["Dome"] = "Slayer Village",
     ["BlackFrieza"] = "Dragon Town",
 }
 
---// ⚡ DATA PROCESSING ⚡ //------------------------
+--// ⚡ DATA PROCESSING
 local BossData = {}
 local BossPriority = {}
 local FirstBossWorld = nil
@@ -39,17 +40,11 @@ local starsFolder = workspace:WaitForChild("Server"):WaitForChild("Stars")
 local enemiesFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies")
 
 for bossName, worldName in pairs(BossList) do
-    if not FirstBossWorld then
-        FirstBossWorld = worldName
-    end
+    if not FirstBossWorld then FirstBossWorld = worldName end
 
     local baseModel = starsFolder:WaitForChild(worldName)
     local enemyFolder = enemiesFolder:WaitForChild(worldName)
 
-    if not baseModel then warn("ไม่พบฐานหลักของโลก "..worldName) end
-    if not enemyFolder then warn("ไม่พบโฟลเดอร์บอสของโลก "..worldName) end
-
-    -- ตรวจ PrimaryPart
     if baseModel and baseModel:IsA("Model") and not baseModel.PrimaryPart then
         local firstPart = baseModel:FindFirstChildWhichIsA("BasePart")
         if firstPart then
@@ -60,15 +55,11 @@ for bossName, worldName in pairs(BossList) do
         end
     end
 
-    BossData[bossName] = {
-        World = worldName,
-        Base = baseModel,
-        EnemyFolder = enemyFolder,
-    }
+    BossData[bossName] = {World = worldName, Base = baseModel, EnemyFolder = enemyFolder}
     table.insert(BossPriority, bossName)
 end
 
---// ⭐ ฟังก์ชันสุ่มไข่ ⭐ //------------------------
+--// ⭐ ฟังก์ชันสุ่มไข่
 local function StartHatching()
     if _G.HatchingLoop then return end
     _G.HatchingLoop = true
@@ -87,18 +78,18 @@ local function StopHatching()
     print("หยุดสุ่มไข่")
 end
 
---// ⭐ วาปไปฐานหลัก (รองรับ Model) ⭐ //------------------------
+--// ⭐ ฟังก์ชันวาปไปฐานหลัก
 local function TPToBase(baseModel)
     if baseModel and baseModel:IsA("Model") and baseModel.PrimaryPart then
         HRP.CFrame = baseModel.PrimaryPart.CFrame + Vector3.new(0,5,0)
-        print("วาปไปฐานหลักของโลก: "..baseModel.Name.." (PrimaryPart: "..baseModel.PrimaryPart.Name..")")
+        print("วาปไปฐานหลักของโลก: "..baseModel.Name)
         task.wait(0.5)
     else
         warn("ฐานหลักไม่ถูกต้อง / nil หรือไม่มี PrimaryPart")
     end
 end
 
---// ⭐ วาปไปโลก ⭐ //------------------------
+--// ⭐ วาปไปโลก
 local function TPWorld(worldName)
     print("วาปไปโลก: "..worldName)
     local args = {"General", "Teleport", "Teleport", worldName}
@@ -106,7 +97,7 @@ local function TPWorld(worldName)
     task.wait(2)
 end
 
---// ⭐ เช็คโลกปัจจุบันจากฐานใกล้ที่สุด ⭐ //------------------------
+--// ⭐ เช็คโลกปัจจุบันจากฐานใกล้ที่สุด
 local function GetCurrentWorld()
     local closestWorld = nil
     local closestDist = math.huge
@@ -132,17 +123,15 @@ local function GetCurrentWorld()
     return closestWorld
 end
 
---// ⭐ MAIN LOOP ⭐ //------------------------
+--// ⭐ MAIN AutoBoss LOOP
 task.spawn(function()
     while task.wait(0.5) do
         if not Settings.AutoBoss then continue end
 
-        -- เช็คโลกปัจจุบัน
         local currentWorld = GetCurrentWorld()
 
         if currentWorld then
             print("ผู้เล่นอยู่โลก: "..currentWorld)
-            -- วาปไปฐานหลัก
             for _, info in pairs(BossData) do
                 if info.World == currentWorld and info.Base then
                     TPToBase(info.Base)
@@ -158,12 +147,10 @@ task.spawn(function()
             end
         end
 
-        -- เริ่มสุ่มไข่
         StartHatching()
 
         local TargetBoss, BossInfo, BossPart = nil, nil, nil
 
-        -- ตรวจหาบอสเป็น Part
         for _, name in ipairs(BossPriority) do
             local info = BossData[name]
             if info and info.EnemyFolder then
@@ -180,10 +167,8 @@ task.spawn(function()
 
         if not TargetBoss then continue end
 
-        -- หยุดสุ่มไข่
         StopHatching()
 
-        -- ถ้าอยู่คนละโลก → วาปไปโลกนั้น
         currentWorld = GetCurrentWorld()
         if currentWorld ~= BossInfo.World then
             print("อยู่คนละโลกกับบอส วาปไป "..BossInfo.World)
@@ -192,20 +177,16 @@ task.spawn(function()
             if not BossPart then continue end
         end
 
-        -- วาปไปข้างหน้าบอส
         if BossPart then
-            local frontOffset = BossPart.CFrame.LookVector * 5  -- 5 studs ข้างหน้า
+            local frontOffset = BossPart.CFrame.LookVector * 5
             HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + frontOffset
             print("วาปไปข้างหน้าบอส: "..TargetBoss)
         end
 
-
-        -- รอจนบอสตาย
         repeat task.wait(0.2)
         until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
         print("บอสตาย: "..TargetBoss)
 
-        -- วาปกลับฐานหลัก
         if BossInfo.Base then
             TPToBase(BossInfo.Base)
         end
@@ -214,45 +195,39 @@ task.spawn(function()
     end
 end)
 
-print("เริ่มทำงานสคริปต์ ReEquip")
+--// ⭐ ReEquip LOOP
+task.spawn(function()
+    while true do
+        local args1 = {"General","Fighters","Unequip_All"}
+        Bridge:FireServer(unpack(args1))
+        task.wait(0.5)
 
-while true do
-    -- Unequip all
-    local args1 = {
-        [1] = "General",
-        [2] = "Fighters",
-        [3] = "Unequip_All"
-    }
-    game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args1))
+        local args2 = {"General","Fighters","Equip_Best"}
+        Bridge:FireServer(unpack(args2))
 
-    -- รอ 1 วินาทีกันเกมไม่ล้ม
-    task.wait(0.5)
+        task.wait(45)
+    end
+end)
 
-    -- Equip Best
-    local args2 = {
-        [1] = "General",
-        [2] = "Fighters",
-        [3] = "Equip_Best"
-    }
-    game:GetService("ReplicatedStorage").Remotes.Bridge:FireServer(unpack(args2))
+--// ⭐ Auto Buy Trial Merchant
+task.spawn(function()
+    local args = {"General","Trial_Merchant","Buy","Slot4"}
+    while true do
+        Bridge:FireServer(unpack(args))
+        task.wait(2)
+    end
+end)
 
+--// ⭐ Auto Reroll Types
+task.spawn(function()
+    local types = {"Clans","Races","Breathings","Haki"}
+    while true do
+        for _, t in ipairs(types) do
+            local args = {"General", t, "Reroll"}
+            Bridge:FireServer(unpack(args))
+        end
+        task.wait(2)
+    end
+end)
 
-    task.wait(45)
-end
-
-local args = {
-    "General",
-    "Trial_Merchant",
-    "Buy",
-    "Slot4"
-}
-
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-local Bridge = Remotes:WaitForChild("Bridge")
-
-
-while true do
-    Bridge:FireServer(unpack(args))
-    wait(3.5)
-end
+print("สคริปต์ทั้งหมดเริ่มทำงานเรียบร้อย ✅")
