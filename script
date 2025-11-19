@@ -188,7 +188,7 @@ task.spawn(function()
         Bridge:FireServer("General","Fighters","Unequip_All")
         task.wait(0.5)
         Bridge:FireServer("General","Fighters","Equip_Best")
-        task.wait(45)
+        task.wait(70)
     end
 end)
 
@@ -207,7 +207,7 @@ task.spawn(function()
         for _, t in ipairs(types) do
             Bridge:FireServer("General", t, "Reroll")
         end
-        task.wait(2)
+        task.wait(0.25)
     end
 end)
 
