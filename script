@@ -2,6 +2,174 @@
 loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
 print("เริ่มทำงานสคริปต์")
 
+--// ⚡ SETTINGS ⚡
+local Settings = {
+    AutoBoss = false,
+    StarDelay = 100000,
+}
+
+--// ⚡ SERVICES ⚡
+local RS = game:GetService("ReplicatedStorage")
+local Bridge = RS:WaitForChild("Remotes"):WaitForChild("Bridge")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
+
+--// ฟังก์ชันได้ HumanoidRootPart
+local function getHRP()
+    local char = player.Character or player.CharacterAdded:Wait()
+    return char:WaitForChild("HumanoidRootPart")
+end
+local HRP = getHRP()
+player.CharacterAdded:Connect(function(c)
+    HRP = c:WaitForChild("HumanoidRootPart")
+end)
+
+--// ⚡ LIST บอส
+local BossList = {
+    ["Magelen"] = "Pirate Island",
+    ["Dome"] = "Slayer Village",
+    ["BlackFrieza"] = "Dragon Town",
+    ["KesameAkat"] = "Leaf Village",
+    ["ItacheAkat"] = "Leaf Village",
+}
+
+--// ⚡ DATA PROCESSING
+local BossData = {}
+local BossPriority = {}
+local FirstBossWorld = nil
+
+local starsFolder = workspace:WaitForChild("Server"):WaitForChild("Stars")
+local enemiesFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies")
+
+for bossName, worldName in pairs(BossList) do
+    if not FirstBossWorld then FirstBossWorld = worldName end
+
+    local baseModel = starsFolder:WaitForChild(worldName)
+    local enemyFolder = enemiesFolder:WaitForChild(worldName)
+
+    if baseModel and baseModel:IsA("Model") and not baseModel.PrimaryPart then
+        local firstPart = baseModel:FindFirstChildWhichIsA("BasePart")
+        if firstPart then baseModel.PrimaryPart = firstPart end
+    end
+
+    BossData[bossName] = {World = worldName, Base = baseModel, EnemyFolder = enemyFolder}
+    table.insert(BossPriority, bossName)
+end
+
+--// ⭐ ฟังก์ชันสุ่มไข่
+local function StartHatching()
+    if _G.HatchingLoop then return end
+    _G.HatchingLoop = true
+    task.spawn(function()
+        local args = {"General", "Star", "Open"}
+        while _G.HatchingLoop do
+            Bridge:FireServer(unpack(args))
+            task.wait(Settings.StarDelay)
+        end
+    end)
+end
+
+local function StopHatching()
+    _G.HatchingLoop = false
+end
+
+--// ⭐ วาปไปฐานหลัก
+local function TPToBase(baseModel)
+    if baseModel and baseModel.PrimaryPart then
+        HRP.CFrame = baseModel.PrimaryPart.CFrame + Vector3.new(0,5,0)
+        task.wait(0.5)
+    end
+end
+
+--// ⭐ วาปไปโลก
+local function TPWorld(worldName)
+    Bridge:FireServer("General","Teleport","Teleport",worldName)
+    task.wait(2)
+end
+
+--// ⭐ เช็คโลก
+local function GetCurrentWorld()
+    local closestWorld = nil
+    local closestDist = math.huge
+    local myPos = HRP.Position
+
+    for _, data in pairs(BossData) do
+        local base = data.Base
+        if base and base.PrimaryPart then
+            local dist = (myPos - base.PrimaryPart.Position).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                closestWorld = data.World
+            end
+        end
+    end
+
+    return closestWorld
+end
+
+--// ⭐ MAIN AutoBoss LOOP
+task.spawn(function()
+    while task.wait(0.5) do
+        if not Settings.AutoBoss then continue end
+
+        local currentWorld = GetCurrentWorld()
+        if not currentWorld then
+            TPWorld(FirstBossWorld)
+            TPToBase(BossData[BossPriority[1]].Base)
+            continue
+        end
+
+        for _, info in pairs(BossData) do
+            if info.World == currentWorld then
+                TPToBase(info.Base)
+                break
+            end
+        end
+
+        StartHatching()
+
+        local TargetBoss, BossInfo, BossPart = nil, nil, nil
+        for _, name in ipairs(BossPriority) do
+            local info = BossData[name]
+            local part = info.EnemyFolder:FindFirstChild(name)
+            if part and part:IsA("BasePart") then
+                TargetBoss = name
+                BossInfo = info
+                BossPart = part
+                break
+            end
+        end
+
+        if not TargetBoss then
+            StopHatching()
+            TPWorld(FirstBossWorld)
+            TPToBase(BossData[BossPriority[1]].Base)
+            continue
+        end
+
+        StopHatching()
+        task.wait(1.5)
+
+        currentWorld = GetCurrentWorld()
+        if currentWorld ~= BossInfo.World then
+            TPWorld(BossInfo.World)
+            task.wait(0.5)
+            BossPart = BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
+            if not BossPart then continue end
+        end
+
+        if BossPart then
+            local front = BossPart.CFrame.LookVector * 5
+            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + front
+        end
+
+        repeat task.wait(0.2)
+        until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
+
+        TPWorld(FirstBossWorld)
+        TPToBase(BossData[BossPriority[1]].Base)
+    end
+end)
 
 --// ⭐ ReEquip LOOP
 task.spawn(function()
@@ -9,7 +177,7 @@ task.spawn(function()
         Bridge:FireServer("General","Fighters","Unequip_All")
         task.wait(0.5)
         Bridge:FireServer("General","Fighters","Equip_Best")
-        task.wait(70)
+        task.wait(100)
     end
 end)
 
@@ -28,8 +196,27 @@ task.spawn(function()
         for _, t in ipairs(types) do
             Bridge:FireServer("General", t, "Reroll")
         end
-        task.wait(0.25)
+        task.wait(1)
     end
 end)
 
-print("สคริปต์ทำงานสมบูรณ์ตามลำดับใหม่แล้ว ✔️")
+--------------------------------------------------------------------
+-- ⭐ ⭐ ระบบ Team Luck / Team Dmg อัตโนมัติ ⭐ ⭐
+--------------------------------------------------------------------
+task.spawn(function()
+    while true do
+        local mapFolder = workspace:WaitForChild("Client"):WaitForChild("Maps")
+
+        if mapFolder:FindFirstChild("Pirate Island") then
+            -- Team Luck
+            Bridge:FireServer("General","Fighters_Team","Equip","9e-706c-4e27-8c54-85955f358b81")
+        else
+            -- Team Damage
+            Bridge:FireServer("General","Fighters_Team","Equip","05-a045-4770-af94-abbee71aa04d")
+        end
+
+        task.wait(1)
+    end
+end)
+
+print("สคริปต์ทั้งหมดรวมเสร็จแล้ว ✔️")
