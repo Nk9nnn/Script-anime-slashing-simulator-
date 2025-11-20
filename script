@@ -5,7 +5,6 @@ print("เริ่มทำงานสคริปต์")
 --// ⚡ SETTINGS ⚡
 local Settings = {
     AutoBoss = true,
-    StarDelay = 0.05, -- ลบ AutoHatch แล้ว ยังเก็บไว้ถ้าต้องการปรับ
 }
 
 --// ⚡ SERVICES ⚡
@@ -147,10 +146,18 @@ task.spawn(function()
             continue
         end
 
-        -- 4. พบบอส → ใช้ Team Dmg
+        -- 4. พบบอส → ใช้ Team Dmg และเดินหน้า 5 วินาที
         EquipTeamDmg()
+        local forwardDir = HRP.CFrame.LookVector
+        local moveTime = 5
+        local startTime = tick()
+        while tick() - startTime < moveTime do
+            HRP.CFrame = HRP.CFrame + forwardDir * 1 -- เดินหน้า 1 stud ต่อรอบ
+            task.wait(0.1)
+        end
 
         -- 5. วาปไปโลกของบอส
+        currentWorld = GetCurrentWorld()
         if currentWorld ~= BossInfo.World then
             TPWorld(BossInfo.World)
             task.wait(0.5)
@@ -177,7 +184,6 @@ task.spawn(function()
     end
 end)
 
-
 --// ⭐ Auto Buy Trial Merchant
 task.spawn(function()
     while true do
@@ -188,4 +194,4 @@ task.spawn(function()
     end
 end)
 
-print("สคริปต์ AutoBoss ใหม่ ✔️ | ลบ AutoHatch + เพิ่ม Team Logic เรียบร้อย")
+print("สคริปต์ v2766")
