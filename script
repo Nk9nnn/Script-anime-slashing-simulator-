@@ -42,15 +42,12 @@ local enemiesFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies")
 
 for bossName, worldName in pairs(BossList) do
     if not FirstBossWorld then FirstBossWorld = worldName end
-
     local baseModel = starsFolder:WaitForChild(worldName)
     local enemyFolder = enemiesFolder:WaitForChild(worldName)
-
     if baseModel and baseModel:IsA("Model") and not baseModel.PrimaryPart then
         local firstPart = baseModel:FindFirstChildWhichIsA("BasePart")
         if firstPart then baseModel.PrimaryPart = firstPart end
     end
-
     BossData[bossName] = {World = worldName, Base = baseModel, EnemyFolder = enemyFolder}
     table.insert(BossPriority, bossName)
 end
@@ -73,11 +70,11 @@ end
 -- ⭐ MAIN AutoBoss + Team อัตโนมัติ ⭐
 --------------------------------------------------------------------
 task.spawn(function()
+    local mapFolder = workspace:WaitForChild("Client"):WaitForChild("Maps")
     while task.wait(0.5) do
         if not Settings.AutoBoss then continue end
 
         -- ตรวจโลกปัจจุบันตามตำแหน่งผู้เล่น
-        local mapFolder = workspace:WaitForChild("Client"):WaitForChild("Maps")
         local currentWorld = nil
         local hrpPos = HRP.Position
         for _, mapData in pairs(mapFolder:GetChildren()) do
@@ -95,7 +92,7 @@ task.spawn(function()
             if currentWorld then break end
         end
 
-        -- ถ้าอยู่ Lobby หรือไม่เจอโลก → ข้าม AutoBoss
+        -- ถ้าอยู่ Lobby หรือไม่เจอ Map → ข้าม AutoBoss
         if currentWorld == "Lobby" or not currentWorld then continue end
 
         -- ตรวจบอสในโลกปัจจุบัน
@@ -129,7 +126,6 @@ task.spawn(function()
         -- วาปไปฐานบอสถ้ามีบอส
         if TargetBoss and BossInfo and BossPart then
             TPToBase(BossInfo.Base)
-
             -- วาปขึ้นหัวบอส + ข้างหน้า
             local front = BossPart.CFrame.LookVector * 5
             HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + front
