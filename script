@@ -4,7 +4,8 @@ print("เริ่มทำงานสคริปต์")
 
 --// ⚡ SETTINGS ⚡
 local Settings = {
-    AutoBoss = true,  -- เปิด/ปิด AutoBoss
+    AutoBoss = true,
+    StarDelay = 0.05, -- ลบ AutoHatch แล้ว ยังเก็บไว้ถ้าต้องการปรับ
 }
 
 --// ⚡ SERVICES ⚡
@@ -42,12 +43,17 @@ local enemiesFolder = workspace:WaitForChild("Server"):WaitForChild("Enemies")
 
 for bossName, worldName in pairs(BossList) do
     if not FirstBossWorld then FirstBossWorld = worldName end
+
     local baseModel = starsFolder:WaitForChild(worldName)
     local enemyFolder = enemiesFolder:WaitForChild(worldName)
+
     if baseModel and baseModel:IsA("Model") and not baseModel.PrimaryPart then
         local firstPart = baseModel:FindFirstChildWhichIsA("BasePart")
-        if firstPart then baseModel.PrimaryPart = firstPart end
+        if firstPart then
+            baseModel.PrimaryPart = firstPart
+        end
     end
+
     BossData[bossName] = {World = worldName, Base = baseModel, EnemyFolder = enemyFolder}
     table.insert(BossPriority, bossName)
 end
@@ -63,117 +69,123 @@ end
 --// ⭐ วาปไปโลก
 local function TPWorld(worldName)
     Bridge:FireServer("General","Teleport","Teleport",worldName)
-    task.wait(2)
+    task.wait(2) -- รอโหลดโลก
 end
 
---------------------------------------------------------------------
--- ⭐ MAIN AutoBoss + Team อัตโนมัติ ⭐
---------------------------------------------------------------------
+--// ⭐ เช็คโลกปัจจุบัน
+local function GetCurrentWorld()
+    local closestWorld = nil
+    local closestDist = math.huge
+    local myPos = HRP.Position
+
+    for _, data in pairs(BossData) do
+        local base = data.Base
+        if base and base.PrimaryPart then
+            local dist = (myPos - base.PrimaryPart.Position).Magnitude
+            if dist < closestDist then
+                closestDist = dist
+                closestWorld = data.World
+            end
+        end
+    end
+
+    return closestWorld
+end
+
+--// ⭐ ทีม
+local function EquipTeamDmg()
+    local args = {
+        "General",
+        "Fighters_Team",
+        "Equip",
+        "05-a045-4770-af94-abbee71aa04d"
+    }
+    Bridge:FireServer(unpack(args))
+end
+
+local function EquipTeamLuck()
+    local args = {
+        "General",
+        "Fighters_Team",
+        "Equip",
+        "9e-706c-4e27-8c54-85955f358b81"
+    }
+    Bridge:FireServer(unpack(args))
+end
+
+--// ⭐ MAIN AutoBoss LOOP
 task.spawn(function()
-    local mapFolder = workspace:WaitForChild("Client"):WaitForChild("Maps")
     while task.wait(0.5) do
         if not Settings.AutoBoss then continue end
 
-        -- ตรวจโลกปัจจุบันตามตำแหน่งผู้เล่น
-        local currentWorld = nil
-        local hrpPos = HRP.Position
-        for _, mapData in pairs(mapFolder:GetChildren()) do
-            if mapData:FindFirstChild("Map") then
-                for _, partContainer in ipairs(mapData.Map:GetChildren()) do
-                    for _, part in ipairs(partContainer:GetChildren()) do
-                        if part:IsA("BasePart") and (hrpPos - part.Position).Magnitude < 5 then
-                            currentWorld = mapData.Name
-                            break
-                        end
-                    end
-                    if currentWorld then break end
-                end
-            end
-            if currentWorld then break end
+        -- 1. เช็คโลกปัจจุบัน
+        local currentWorld = GetCurrentWorld()
+        if not currentWorld then
+            TPWorld(FirstBossWorld)
+            TPToBase(BossData[BossPriority[1]].Base)
+            continue
         end
 
-        -- ถ้าอยู่ Lobby หรือไม่เจอ Map → ข้าม AutoBoss
-        if currentWorld == "Lobby" or not currentWorld then continue end
-
-        -- ตรวจบอสในโลกปัจจุบัน
+        -- 2. ตรวจบอสในโลก
         local TargetBoss, BossInfo, BossPart = nil, nil, nil
         for _, name in ipairs(BossPriority) do
             local info = BossData[name]
-            if info.World == currentWorld then
-                local part = info.EnemyFolder:FindFirstChild(name)
-                if part and part:IsA("BasePart") then
-                    TargetBoss = name
-                    BossInfo = info
-                    BossPart = part
-                    break
-                end
+            local part = info.EnemyFolder:FindFirstChild(name)
+            if part and part:IsA("BasePart") then
+                TargetBoss = name
+                BossInfo = info
+                BossPart = part
+                break
             end
         end
 
-        -- สลับทีมตามเงื่อนไข
-        if TargetBoss then
-            -- เจอบอส → Team Dmg
-            Bridge:FireServer("General","Fighters_Team","Equip","05-a045-4770-af94-abbee71aa04d")
-        else
-            -- ไม่มีบอส
-            if currentWorld == "Pirate Island" then
-                Bridge:FireServer("General","Fighters_Team","Equip","9e-706c-4e27-8c54-85955f358b81") -- Team Luck
-            else
-                Bridge:FireServer("General","Fighters_Team","Equip","05-a045-4770-af94-abbee71aa04d") -- Team Dmg
-            end
-        end
-
-        -- วาปไปฐานบอสถ้ามีบอส
-        if TargetBoss and BossInfo and BossPart then
-            TPToBase(BossInfo.Base)
-            -- วาปขึ้นหัวบอส + ข้างหน้า
-            local front = BossPart.CFrame.LookVector * 5
-            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + front
-
-            -- รอจนบอสตาย
-            repeat task.wait(0.2)
-            until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
-
-            -- วาปกลับโลกแรกในลิสต์
+        -- 3. ถ้าไม่พบบอส → ใช้ Team Luck และกลับโลกแรก
+        if not TargetBoss then
+            EquipTeamLuck()
             TPWorld(FirstBossWorld)
             TPToBase(BossData[BossPriority[1]].Base)
+            continue
         end
+
+        -- 4. พบบอส → ใช้ Team Dmg
+        EquipTeamDmg()
+
+        -- 5. วาปไปโลกของบอส
+        if currentWorld ~= BossInfo.World then
+            TPWorld(BossInfo.World)
+            task.wait(0.5)
+            BossPart = BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
+            if not BossPart then continue end
+        end
+
+        -- 6. วาปขึ้นหัวบอส + ข้างหน้า
+        if BossPart then
+            local front = BossPart.CFrame.LookVector * 5
+            HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + front
+        end
+
+        -- 7. รอจนบอสตาย (timeout 60 วิ)
+        local timeout = 0
+        repeat
+            task.wait(0.2)
+            timeout = timeout + 0.2
+        until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss) or timeout > 60
+
+        -- 8. กลับโลกแรกและวาปฐาน
+        TPWorld(FirstBossWorld)
+        TPToBase(BossData[BossPriority[1]].Base)
     end
 end)
 
---------------------------------------------------------------------
--- ⭐ ReEquip LOOP
---------------------------------------------------------------------
-task.spawn(function()
-    while true do
-        Bridge:FireServer("General","Fighters","Unequip_All")
-        task.wait(0.5)
-        Bridge:FireServer("General","Fighters","Equip_Best")
-        task.wait(100)
-    end
-end)
 
---------------------------------------------------------------------
--- ⭐ Auto Buy Trial Merchant
---------------------------------------------------------------------
+--// ⭐ Auto Buy Trial Merchant
 task.spawn(function()
     while true do
-        Bridge:FireServer("General","Trial_Merchant","Buy","Slot4")
+        pcall(function()
+            Bridge:FireServer("General","Trial_Merchant","Buy","Slot4")
+        end)
         task.wait(2)
     end
 end)
 
---------------------------------------------------------------------
--- ⭐ Auto Reroll Types
---------------------------------------------------------------------
-task.spawn(function()
-    local types = {"Clans","Races","Breathings","Haki","Ki","Fruits"}
-    while true do
-        for _, t in ipairs(types) do
-            Bridge:FireServer("General", t, "Reroll")
-        end
-        task.wait(1)
-    end
-end)
-
-print("สคริปต์ทั้งหมดรวมเสร็จสมบูรณ์ ✔️")
+print("สคริปต์ AutoBoss ใหม่ ✔️ | ลบ AutoHatch + เพิ่ม Team Logic เรียบร้อย")
