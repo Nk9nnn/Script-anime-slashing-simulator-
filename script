@@ -28,6 +28,7 @@ local BossList = {
     ["Magelen"] = "Pirate Island",
     ["Dome"] = "Slayer Village",
     ["BlackFrieza"] = "Dragon Town",
+    ["Boo"] = "Dragon Town",
     ["KesameAkat"] = "Leaf Village",
     ["ItacheAkat"] = "Leaf Village",
 }
