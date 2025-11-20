@@ -4,8 +4,7 @@ print("เริ่มทำงานสคริปต์")
 
 --// ⚡ SETTINGS ⚡
 local Settings = {
-    AutoBoss = false,
-    StarDelay = 100000,
+    AutoBoss = true,  -- เปิด/ปิด AutoBoss
 }
 
 --// ⚡ SERVICES ⚡
@@ -56,24 +55,7 @@ for bossName, worldName in pairs(BossList) do
     table.insert(BossPriority, bossName)
 end
 
---// ⭐ ฟังก์ชันสุ่มไข่
-local function StartHatching()
-    if _G.HatchingLoop then return end
-    _G.HatchingLoop = true
-    task.spawn(function()
-        local args = {"General", "Star", "Open"}
-        while _G.HatchingLoop do
-            Bridge:FireServer(unpack(args))
-            task.wait(Settings.StarDelay)
-        end
-    end)
-end
-
-local function StopHatching()
-    _G.HatchingLoop = false
-end
-
---// ⭐ วาปไปฐานหลัก
+--// ⭐ ฟังก์ชันวาปไปฐานหลัก
 local function TPToBase(baseModel)
     if baseModel and baseModel.PrimaryPart then
         HRP.CFrame = baseModel.PrimaryPart.CFrame + Vector3.new(0,5,0)
@@ -87,91 +69,85 @@ local function TPWorld(worldName)
     task.wait(2)
 end
 
---// ⭐ เช็คโลก
-local function GetCurrentWorld()
-    local closestWorld = nil
-    local closestDist = math.huge
-    local myPos = HRP.Position
-
-    for _, data in pairs(BossData) do
-        local base = data.Base
-        if base and base.PrimaryPart then
-            local dist = (myPos - base.PrimaryPart.Position).Magnitude
-            if dist < closestDist then
-                closestDist = dist
-                closestWorld = data.World
-            end
-        end
-    end
-
-    return closestWorld
-end
-
---// ⭐ MAIN AutoBoss LOOP
+--------------------------------------------------------------------
+-- ⭐ MAIN AutoBoss + Team อัตโนมัติ ⭐
+--------------------------------------------------------------------
 task.spawn(function()
     while task.wait(0.5) do
         if not Settings.AutoBoss then continue end
 
-        local currentWorld = GetCurrentWorld()
-        if not currentWorld then
-            TPWorld(FirstBossWorld)
-            TPToBase(BossData[BossPriority[1]].Base)
-            continue
-        end
-
-        for _, info in pairs(BossData) do
-            if info.World == currentWorld then
-                TPToBase(info.Base)
-                break
+        -- ตรวจโลกปัจจุบันตามตำแหน่งผู้เล่น
+        local mapFolder = workspace:WaitForChild("Client"):WaitForChild("Maps")
+        local currentWorld = nil
+        local hrpPos = HRP.Position
+        for _, mapData in pairs(mapFolder:GetChildren()) do
+            if mapData:FindFirstChild("Map") then
+                for _, partContainer in ipairs(mapData.Map:GetChildren()) do
+                    for _, part in ipairs(partContainer:GetChildren()) do
+                        if part:IsA("BasePart") and (hrpPos - part.Position).Magnitude < 5 then
+                            currentWorld = mapData.Name
+                            break
+                        end
+                    end
+                    if currentWorld then break end
+                end
             end
+            if currentWorld then break end
         end
 
-        StartHatching()
+        -- ถ้าอยู่ Lobby หรือไม่เจอโลก → ข้าม AutoBoss
+        if currentWorld == "Lobby" or not currentWorld then continue end
 
+        -- ตรวจบอสในโลกปัจจุบัน
         local TargetBoss, BossInfo, BossPart = nil, nil, nil
         for _, name in ipairs(BossPriority) do
             local info = BossData[name]
-            local part = info.EnemyFolder:FindFirstChild(name)
-            if part and part:IsA("BasePart") then
-                TargetBoss = name
-                BossInfo = info
-                BossPart = part
-                break
+            if info.World == currentWorld then
+                local part = info.EnemyFolder:FindFirstChild(name)
+                if part and part:IsA("BasePart") then
+                    TargetBoss = name
+                    BossInfo = info
+                    BossPart = part
+                    break
+                end
             end
         end
 
-        if not TargetBoss then
-            StopHatching()
-            TPWorld(FirstBossWorld)
-            TPToBase(BossData[BossPriority[1]].Base)
-            continue
+        -- สลับทีมตามเงื่อนไข
+        if TargetBoss then
+            -- เจอบอส → Team Dmg
+            Bridge:FireServer("General","Fighters_Team","Equip","05-a045-4770-af94-abbee71aa04d")
+        else
+            -- ไม่มีบอส
+            if currentWorld == "Pirate Island" then
+                Bridge:FireServer("General","Fighters_Team","Equip","9e-706c-4e27-8c54-85955f358b81") -- Team Luck
+            else
+                Bridge:FireServer("General","Fighters_Team","Equip","05-a045-4770-af94-abbee71aa04d") -- Team Dmg
+            end
         end
 
-        StopHatching()
-        task.wait(1.5)
+        -- วาปไปฐานบอสถ้ามีบอส
+        if TargetBoss and BossInfo and BossPart then
+            TPToBase(BossInfo.Base)
 
-        currentWorld = GetCurrentWorld()
-        if currentWorld ~= BossInfo.World then
-            TPWorld(BossInfo.World)
-            task.wait(0.5)
-            BossPart = BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
-            if not BossPart then continue end
-        end
-
-        if BossPart then
+            -- วาปขึ้นหัวบอส + ข้างหน้า
             local front = BossPart.CFrame.LookVector * 5
             HRP.CFrame = BossPart.CFrame + Vector3.new(0,5,0) + front
+
+            -- รอจนบอสตาย
+            repeat task.wait(0.2)
+            until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
+
+            -- วาปกลับโลกแรกในลิสต์
+            TPWorld(FirstBossWorld)
+            TPToBase(BossData[BossPriority[1]].Base)
         end
-
-        repeat task.wait(0.2)
-        until not BossInfo.EnemyFolder:FindFirstChild(TargetBoss)
-
-        TPWorld(FirstBossWorld)
-        TPToBase(BossData[BossPriority[1]].Base)
     end
 end)
 
---// ⭐ ReEquip LOOP
+--------------------------------------------------------------------
+-- ⭐ ReEquip LOOP
+--------------------------------------------------------------------
 task.spawn(function()
     while true do
         Bridge:FireServer("General","Fighters","Unequip_All")
@@ -181,7 +157,9 @@ task.spawn(function()
     end
 end)
 
---// ⭐ Auto Buy Trial Merchant
+--------------------------------------------------------------------
+-- ⭐ Auto Buy Trial Merchant
+--------------------------------------------------------------------
 task.spawn(function()
     while true do
         Bridge:FireServer("General","Trial_Merchant","Buy","Slot4")
@@ -189,7 +167,9 @@ task.spawn(function()
     end
 end)
 
---// ⭐ Auto Reroll Types
+--------------------------------------------------------------------
+-- ⭐ Auto Reroll Types
+--------------------------------------------------------------------
 task.spawn(function()
     local types = {"Clans","Races","Breathings","Haki","Ki","Fruits"}
     while true do
@@ -200,23 +180,4 @@ task.spawn(function()
     end
 end)
 
---------------------------------------------------------------------
--- ⭐ ⭐ ระบบ Team Luck / Team Dmg อัตโนมัติ ⭐ ⭐
---------------------------------------------------------------------
-task.spawn(function()
-    while true do
-        local mapFolder = workspace:WaitForChild("Client"):WaitForChild("Maps")
-
-        if mapFolder:FindFirstChild("Pirate Island") then
-            -- Team Luck
-            Bridge:FireServer("General","Fighters_Team","Equip","9e-706c-4e27-8c54-85955f358b81")
-        else
-            -- Team Damage
-            Bridge:FireServer("General","Fighters_Team","Equip","05-a045-4770-af94-abbee71aa04d")
-        end
-
-        task.wait(1)
-    end
-end)
-
-print("สคริปต์ทั้งหมดรวมเสร็จแล้ว ✔️")
+print("สคริปต์ทั้งหมดรวมเสร็จสมบูรณ์ ✔️")
