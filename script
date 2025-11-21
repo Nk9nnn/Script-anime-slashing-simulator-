@@ -4,7 +4,7 @@ print("เริ่มทำงานสคริปต์")
 
 --// ⚡ SETTINGS ⚡
 local Settings = {
-    AutoBoss = true,
+    AutoBoss = flase,
 }
 
 --// ⚡ SERVICES ⚡
