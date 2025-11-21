@@ -68,7 +68,7 @@ end
 --// ⭐ วาปไปโลก
 local function TPWorld(worldName)
     Bridge:FireServer("General","Teleport","Teleport",worldName)
-    task.wait(2) -- รอโหลดโลก
+    task.wait(0.5) -- รอโหลดโลก
 end
 
 --// ⭐ เช็คโลกปัจจุบัน
