@@ -146,13 +146,13 @@ task.spawn(function()
             continue
         end
 
-        -- 4. พบบอส → ใช้ Team Dmg และเดินหน้า 5 วินาที
+        -- 4. พบบอส → ใช้ Team Dmg และเดินหน้า 2 วินาที
         EquipTeamDmg()
         local forwardDir = HRP.CFrame.LookVector
-        local moveTime = 5
+        local moveTime = 2
         local startTime = tick()
         while tick() - startTime < moveTime do
-            HRP.CFrame = HRP.CFrame + forwardDir * 1 -- เดินหน้า 1 stud ต่อรอบ
+            HRP.CFrame = HRP.CFrame + forwardDir * 5 -- เดินหน้า 5 stud ต่อรอบ
             task.wait(0.1)
         end
 
