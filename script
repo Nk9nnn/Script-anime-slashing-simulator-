@@ -1,5 +1,5 @@
 --// โหลดสคริปต์หลัก
-loadstring(game:HttpGet("https://raw.githubusercontent.com/Allanursulino/fight.lua/refs/heads/main/AnimeFight.lua"))()
+loadstring(game:HttpGet("https://pastefy.app/75absC5Z/raw"))()
 print("เริ่มทำงานสคริปต์")
 
 --// ⚡ SETTINGS ⚡
